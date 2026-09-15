@@ -76,12 +76,18 @@ async function apiRequest(url, options = {}) {
     ...(options.headers || {}),
   };
 
-  // Add JSON content type when a body exists
+  /* -------------------------------------------------------
+     JSON CONTENT TYPE
+     ------------------------------------------------------- */
+
   if (options.body && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
 
-  // Add JWT authorization
+  /* -------------------------------------------------------
+     AUTHORIZATION
+     ------------------------------------------------------- */
+
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -92,7 +98,10 @@ async function apiRequest(url, options = {}) {
       headers,
     });
 
-    // Try to parse JSON response
+    /* -----------------------------------------------------
+       PARSE RESPONSE
+       ----------------------------------------------------- */
+
     let data = null;
 
     const contentType = response.headers.get("content-type");
@@ -105,12 +114,18 @@ async function apiRequest(url, options = {}) {
       data = text ? { message: text } : null;
     }
 
-    // Handle unauthorized user
+    /* -----------------------------------------------------
+       UNAUTHORIZED
+       ----------------------------------------------------- */
+
     if (response.status === 401) {
       clearAuthData();
     }
 
-    // Handle API errors
+    /* -----------------------------------------------------
+       API ERROR
+       ----------------------------------------------------- */
+
     if (!response.ok) {
       const error = new Error(
         data?.message || `Request failed with status ${response.status}`,
@@ -122,9 +137,20 @@ async function apiRequest(url, options = {}) {
       throw error;
     }
 
+    /* -----------------------------------------------------
+       SUCCESS
+       ----------------------------------------------------- */
+
     return data;
   } catch (error) {
-    console.error("API request failed:", error);
+    /*
+      Authentication errors are handled by the UI toast.
+      They should not appear as unnecessary console errors.
+    */
+
+    if (error?.status !== 401 && error?.status !== 403) {
+      console.error("API request failed:", error);
+    }
 
     throw error;
   }
