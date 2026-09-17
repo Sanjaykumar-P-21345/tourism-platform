@@ -29,7 +29,6 @@ export function getUser() {
     return JSON.parse(user);
   } catch (error) {
     console.error("Failed to parse stored user:", error);
-
     return null;
   }
 }
@@ -69,19 +68,20 @@ export function clearAuthData() {
    API REQUEST
    ========================================================= */
 
-async function apiRequest(url, options = {}) {
+export async function apiRequest(url, options = {}) {
   const token = getToken();
 
-  const headers = {
-    ...(options.headers || {}),
-  };
+  const headers = new Headers(options.headers || {});
 
   /* -------------------------------------------------------
      JSON CONTENT TYPE
      ------------------------------------------------------- */
 
-  if (options.body && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
+  if (
+    options.body &&
+    !headers.has("Content-Type")
+  ) {
+    headers.set("Content-Type", "application/json");
   }
 
   /* -------------------------------------------------------
@@ -89,7 +89,10 @@ async function apiRequest(url, options = {}) {
      ------------------------------------------------------- */
 
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers.set(
+      "Authorization",
+      `Bearer ${token}`,
+    );
   }
 
   try {
@@ -104,14 +107,20 @@ async function apiRequest(url, options = {}) {
 
     let data = null;
 
-    const contentType = response.headers.get("content-type");
+    const contentType =
+      response.headers.get("content-type");
 
-    if (contentType && contentType.includes("application/json")) {
+    if (
+      contentType &&
+      contentType.includes("application/json")
+    ) {
       data = await response.json();
     } else {
       const text = await response.text();
 
-      data = text ? { message: text } : null;
+      data = text
+        ? { message: text }
+        : null;
     }
 
     /* -----------------------------------------------------
@@ -128,7 +137,8 @@ async function apiRequest(url, options = {}) {
 
     if (!response.ok) {
       const error = new Error(
-        data?.message || `Request failed with status ${response.status}`,
+        data?.message ||
+          `Request failed with status ${response.status}`,
       );
 
       error.status = response.status;
@@ -144,12 +154,17 @@ async function apiRequest(url, options = {}) {
     return data;
   } catch (error) {
     /*
-      Authentication errors are handled by the UI toast.
-      They should not appear as unnecessary console errors.
+      Authentication errors are handled by the UI.
     */
 
-    if (error?.status !== 401 && error?.status !== 403) {
-      console.error("API request failed:", error);
+    if (
+      error?.status !== 401 &&
+      error?.status !== 403
+    ) {
+      console.error(
+        "API request failed:",
+        error,
+      );
     }
 
     throw error;
@@ -160,7 +175,10 @@ async function apiRequest(url, options = {}) {
    GET REQUEST
    ========================================================= */
 
-export async function apiGet(url, options = {}) {
+export async function apiGet(
+  url,
+  options = {},
+) {
   return apiRequest(url, {
     ...options,
     method: "GET",
@@ -171,11 +189,18 @@ export async function apiGet(url, options = {}) {
    POST REQUEST
    ========================================================= */
 
-export async function apiPost(url, body, options = {}) {
+export async function apiPost(
+  url,
+  body,
+  options = {},
+) {
   return apiRequest(url, {
     ...options,
     method: "POST",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body:
+      body !== undefined
+        ? JSON.stringify(body)
+        : undefined,
   });
 }
 
@@ -183,11 +208,18 @@ export async function apiPost(url, body, options = {}) {
    PUT REQUEST
    ========================================================= */
 
-export async function apiPut(url, body, options = {}) {
+export async function apiPut(
+  url,
+  body,
+  options = {},
+) {
   return apiRequest(url, {
     ...options,
     method: "PUT",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body:
+      body !== undefined
+        ? JSON.stringify(body)
+        : undefined,
   });
 }
 
@@ -195,11 +227,18 @@ export async function apiPut(url, body, options = {}) {
    PATCH REQUEST
    ========================================================= */
 
-export async function apiPatch(url, body, options = {}) {
+export async function apiPatch(
+  url,
+  body,
+  options = {},
+) {
   return apiRequest(url, {
     ...options,
     method: "PATCH",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body:
+      body !== undefined
+        ? JSON.stringify(body)
+        : undefined,
   });
 }
 
@@ -207,7 +246,10 @@ export async function apiPatch(url, body, options = {}) {
    DELETE REQUEST
    ========================================================= */
 
-export async function apiDelete(url, options = {}) {
+export async function apiDelete(
+  url,
+  options = {},
+) {
   return apiRequest(url, {
     ...options,
     method: "DELETE",
@@ -215,7 +257,7 @@ export async function apiDelete(url, options = {}) {
 }
 
 /* =========================================================
-   LOGOUT HELPER
+   LOGOUT
    ========================================================= */
 
 export function logout() {

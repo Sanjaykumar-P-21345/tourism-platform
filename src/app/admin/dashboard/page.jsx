@@ -1,290 +1,410 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  Globe2,
+  MapPin,
+  Hotel,
+  Utensils,
+  Car,
+  BriefcaseBusiness,
+  Map,
+  Mail,
+  ArrowRight,
+  LayoutDashboard,
+  Loader2,
+} from "lucide-react";
 
-import { apiGet, logout } from "@/utils/api";
+import { adminApi } from "@/utils/adminApi";
+
+const managementItems = [
+  {
+    title: "Destinations",
+    description: "Tourism destinations",
+    href: "/admin/dashboard/destinations",
+    icon: Globe2,
+  },
+  {
+    title: "Places",
+    description: "Tourist attractions",
+    href: "/admin/dashboard/places",
+    icon: MapPin,
+  },
+  {
+    title: "Hotels",
+    description: "Hotels and stays",
+    href: "/admin/dashboard/hotels",
+    icon: Hotel,
+  },
+  {
+    title: "Restaurants",
+    description: "Restaurant listings",
+    href: "/admin/dashboard/restaurants",
+    icon: Utensils,
+  },
+  {
+    title: "Transportation",
+    description: "Travel and transport",
+    href: "/admin/dashboard/transportation",
+    icon: Car,
+  },
+  {
+    title: "Packages",
+    description: "Tourism packages",
+    href: "/admin/dashboard/packages",
+    icon: BriefcaseBusiness,
+  },
+  {
+    title: "Itineraries",
+    description: "Travel itineraries",
+    href: "/admin/dashboard/itineraries",
+    icon: Map,
+  },
+];
+
+function getCount(data) {
+  if (!data) return 0;
+
+  if (Array.isArray(data)) {
+    return data.length;
+  }
+
+  if (Array.isArray(data.data)) {
+    return data.data.length;
+  }
+
+  if (Array.isArray(data.items)) {
+    return data.items.length;
+  }
+
+  return 0;
+}
+
+function StatCard({ title, value, description, href, icon: Icon }) {
+  return (
+    <Link
+      href={href}
+      className="group rounded-2xl border border-slate-800 bg-slate-900 p-5 transition hover:-translate-y-0.5 hover:border-indigo-500/50 hover:bg-slate-900/90"
+    >
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-400">{title}</p>
+
+          <p className="mt-2 text-3xl font-bold text-white">{value}</p>
+        </div>
+
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400">
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-xs text-slate-500">{description}</p>
+
+        <ArrowRight className="h-4 w-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-indigo-400" />
+      </div>
+    </Link>
+  );
+}
+
+function QuickLink({ href, label, icon: Icon }) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-300 transition hover:border-indigo-500/40 hover:bg-slate-800 hover:text-white"
+    >
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 text-slate-400 transition group-hover:bg-indigo-600/15 group-hover:text-indigo-400">
+        <Icon className="h-4 w-4" />
+      </div>
+
+      <span className="flex-1">{label}</span>
+
+      <ArrowRight className="h-4 w-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-indigo-400" />
+    </Link>
+  );
+}
 
 export default function AdminDashboardPage() {
-  const router = useRouter();
+  const [stats, setStats] = useState({
+    destinations: 0,
+    places: 0,
+    hotels: 0,
+    restaurants: 0,
+    transportation: 0,
+    packages: 0,
+    itineraries: 0,
+    inquiries: 0,
+  });
 
-  const [admin, setAdmin] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  /* =========================================================
-     LOAD AUTHENTICATED ADMIN
-     ========================================================= */
-
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
-    async function loadAdmin() {
+    async function loadDashboard() {
       try {
-        const token = sessionStorage.getItem("token");
+        setLoading(true);
+        setError("");
 
-        /* ---------------------------------------------------
-           CHECK TOKEN
-           --------------------------------------------------- */
+        /*
+         * IMPORTANT:
+         *
+         * Do NOT request /api/dashboard/inquiries here yet.
+         * That route does not exist, which was causing the 404.
+         */
 
-        if (!token) {
-          router.replace("/admin/login");
-          return;
+        const results = await Promise.allSettled([
+          adminApi.get("/api/dashboard/destinations"),
+          adminApi.get("/api/dashboard/places"),
+          adminApi.get("/api/dashboard/hotels"),
+          adminApi.get("/api/dashboard/restaurants"),
+          adminApi.get("/api/dashboard/transportation"),
+          adminApi.get("/api/dashboard/packages"),
+          adminApi.get("/api/dashboard/itineraries"),
+        ]);
+
+        if (!mounted) return;
+
+        const [
+          destinations,
+          places,
+          hotels,
+          restaurants,
+          transportation,
+          packages,
+          itineraries,
+        ] = results;
+
+        setStats({
+          destinations:
+            destinations.status === "fulfilled"
+              ? getCount(destinations.value)
+              : 0,
+
+          places: places.status === "fulfilled" ? getCount(places.value) : 0,
+
+          hotels: hotels.status === "fulfilled" ? getCount(hotels.value) : 0,
+
+          restaurants:
+            restaurants.status === "fulfilled"
+              ? getCount(restaurants.value)
+              : 0,
+
+          transportation:
+            transportation.status === "fulfilled"
+              ? getCount(transportation.value)
+              : 0,
+
+          packages:
+            packages.status === "fulfilled" ? getCount(packages.value) : 0,
+
+          itineraries:
+            itineraries.status === "fulfilled"
+              ? getCount(itineraries.value)
+              : 0,
+
+          inquiries: 0,
+        });
+
+        const failedRequests = results.filter(
+          (result) => result.status === "rejected",
+        );
+
+        if (failedRequests.length > 0) {
+          console.warn(
+            "Some dashboard statistics could not be loaded.",
+            failedRequests,
+          );
         }
+      } catch (err) {
+        console.error("Dashboard loading failed:", err);
 
-        /* ---------------------------------------------------
-           VERIFY TOKEN WITH SERVER
-           --------------------------------------------------- */
-
-        const response = await apiGet("/api/admin/me");
-
-        if (!response?.success || !response?.user) {
-          sessionStorage.removeItem("token");
-          sessionStorage.removeItem("user");
-
-          router.replace("/admin/login");
-          return;
+        if (mounted) {
+          setError(err?.message || "Unable to load dashboard statistics.");
         }
-
-        if (isMounted) {
-          setAdmin(response.user);
-
-          /*
-            Keep sessionStorage user data
-            synchronized with the server.
-          */
-          sessionStorage.setItem("user", JSON.stringify(response.user));
-        }
-      } catch (error) {
-        console.error("Failed to load admin:", error);
-
-        if (!isMounted) {
-          return;
-        }
-
-        sessionStorage.removeItem("token");
-        sessionStorage.removeItem("user");
-
-        router.replace("/admin/login");
       } finally {
-        if (isMounted) {
+        if (mounted) {
           setLoading(false);
         }
       }
     }
 
-    loadAdmin();
+    loadDashboard();
 
     return () => {
-      isMounted = false;
+      mounted = false;
     };
-  }, [router]);
-
-  /* =========================================================
-     HANDLE LOGOUT
-     ========================================================= */
-
-  async function handleLogout() {
-    try {
-      const token = sessionStorage.getItem("token");
-
-      /*
-        Call logout API when a token exists.
-      */
-      if (token) {
-        try {
-          await apiGet("/api/admin/me");
-        } catch (error) {
-          console.log("Session verification before logout failed.");
-        }
-      }
-    } finally {
-      /*
-        Since JWT is stored in sessionStorage,
-        removing the token completes client logout.
-      */
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("user");
-
-      router.replace("/admin/login");
-    }
-  }
-
-  /* =========================================================
-     LOADING SCREEN
-     ========================================================= */
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-indigo-500" />
-
-          <p className="mt-4 text-sm text-slate-400">
-            Loading admin dashboard...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  /* =========================================================
-     ERROR
-     ========================================================= */
-
-  if (error) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-center">
-          <p className="text-red-400">{error}</p>
-
-          <button
-            onClick={() => router.replace("/admin/login")}
-            className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-          >
-            Go to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  /* =========================================================
-     DASHBOARD
-     ========================================================= */
+  }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      {/* =====================================================
-          HEADER
-          ===================================================== */}
-
-      <header className="border-b border-white/10 bg-slate-900/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+    <div className="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+      {/* HEADER */}
+      <section className="mb-7">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <h1 className="text-xl font-bold">Tourism Admin</h1>
+            <div className="mb-2 flex items-center gap-2 text-indigo-400">
+              <LayoutDashboard className="h-5 w-5" />
 
-            <p className="text-xs text-slate-400">Administration Dashboard</p>
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                Dashboard
+              </span>
+            </div>
+
+            <h1 className="text-2xl font-bold text-white sm:text-3xl">
+              Tourism Management
+            </h1>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Manage your tourism platform from one place.
+            </p>
           </div>
-
-          <button
-            onClick={handleLogout}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10"
-          >
-            Logout
-          </button>
         </div>
-      </header>
+      </section>
 
-      {/* =====================================================
-          MAIN
-          ===================================================== */}
+      {/* ERROR */}
+      {error && (
+        <div className="mb-6 rounded-xl border border-red-900/50 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
 
-      <main className="mx-auto max-w-7xl px-6 py-10">
-        {/* WELCOME */}
+      {/* STATS */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Destinations"
+          value={loading ? "—" : stats.destinations}
+          description="Tourism destinations"
+          href="/admin/dashboard/destinations"
+          icon={Globe2}
+        />
 
-        <div className="mb-8">
-          <p className="text-sm text-indigo-400">Welcome back</p>
+        <StatCard
+          title="Places"
+          value={loading ? "—" : stats.places}
+          description="Tourist attractions"
+          href="/admin/dashboard/places"
+          icon={MapPin}
+        />
 
-          <h2 className="mt-1 text-3xl font-bold">
-            {admin?.name || "Administrator"}
-          </h2>
+        <StatCard
+          title="Hotels"
+          value={loading ? "—" : stats.hotels}
+          description="Hotels and stays"
+          href="/admin/dashboard/hotels"
+          icon={Hotel}
+        />
 
-          <p className="mt-2 text-slate-400">
-            Manage your tourism platform from here.
+        <StatCard
+          title="Restaurants"
+          value={loading ? "—" : stats.restaurants}
+          description="Restaurant listings"
+          href="/admin/dashboard/restaurants"
+          icon={Utensils}
+        />
+
+        <StatCard
+          title="Transportation"
+          value={loading ? "—" : stats.transportation}
+          description="Travel and transport"
+          href="/admin/dashboard/transportation"
+          icon={Car}
+        />
+
+        <StatCard
+          title="Packages"
+          value={loading ? "—" : stats.packages}
+          description="Tourism packages"
+          href="/admin/dashboard/packages"
+          icon={BriefcaseBusiness}
+        />
+
+        <StatCard
+          title="Itineraries"
+          value={loading ? "—" : stats.itineraries}
+          description="Travel itineraries"
+          href="/admin/dashboard/itineraries"
+          icon={Map}
+        />
+
+        <StatCard
+          title="New Inquiries"
+          value="0"
+          description="Visitor inquiries"
+          href="/admin/dashboard/inquiries"
+          icon={Mail}
+        />
+      </section>
+
+      {/* QUICK LINKS */}
+      <section className="mt-7 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+        <div className="mb-5">
+          <h2 className="text-lg font-bold text-white">Quick Management</h2>
+
+          <p className="mt-1 text-sm text-slate-400">
+            Quickly access the main management sections.
           </p>
         </div>
 
-        {/* ===================================================
-            STATS
-            =================================================== */}
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <QuickLink
+            href="/admin/dashboard/destinations"
+            label="Manage Destinations"
+            icon={Globe2}
+          />
 
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {/* DESTINATIONS */}
+          <QuickLink
+            href="/admin/dashboard/places"
+            label="Manage Places"
+            icon={MapPin}
+          />
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <p className="text-sm text-slate-400">Destinations</p>
+          <QuickLink
+            href="/admin/dashboard/hotels"
+            label="Manage Hotels"
+            icon={Hotel}
+          />
 
-            <p className="mt-3 text-3xl font-bold">0</p>
+          <QuickLink
+            href="/admin/dashboard/restaurants"
+            label="Manage Restaurants"
+            icon={Utensils}
+          />
 
-            <p className="mt-2 text-xs text-slate-500">Tourism destinations</p>
-          </div>
+          <QuickLink
+            href="/admin/dashboard/transportation"
+            label="Manage Transportation"
+            icon={Car}
+          />
 
-          {/* PLACES */}
+          <QuickLink
+            href="/admin/dashboard/packages"
+            label="Manage Packages"
+            icon={BriefcaseBusiness}
+          />
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <p className="text-sm text-slate-400">Places</p>
+          <QuickLink
+            href="/admin/dashboard/itineraries"
+            label="Manage Itineraries"
+            icon={Map}
+          />
 
-            <p className="mt-3 text-3xl font-bold">0</p>
-
-            <p className="mt-2 text-xs text-slate-500">Tourist attractions</p>
-          </div>
-
-          {/* HOTELS */}
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <p className="text-sm text-slate-400">Hotels</p>
-
-            <p className="mt-3 text-3xl font-bold">0</p>
-
-            <p className="mt-2 text-xs text-slate-500">Hotels and stays</p>
-          </div>
-
-          {/* INQUIRIES */}
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <p className="text-sm text-slate-400">New Inquiries</p>
-
-            <p className="mt-3 text-3xl font-bold">0</p>
-
-            <p className="mt-2 text-xs text-slate-500">Visitor inquiries</p>
-          </div>
+          <QuickLink
+            href="/admin/dashboard/inquiries"
+            label="View Inquiries"
+            icon={Mail}
+          />
         </div>
+      </section>
 
-        {/* ===================================================
-            ADMIN INFORMATION
-            =================================================== */}
-
-        <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-6">
-          <h3 className="text-lg font-semibold">Admin Account</h3>
-
-          <div className="mt-5 grid gap-5 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-slate-500">Name</p>
-
-              <p className="mt-1 text-sm text-slate-200">
-                {admin?.name || "-"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-slate-500">Email</p>
-
-              <p className="mt-1 text-sm text-slate-200">
-                {admin?.email || "-"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-slate-500">Status</p>
-
-              <p className="mt-1 text-sm font-medium text-emerald-400">
-                {admin?.status || "-"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs text-slate-500">Last Login</p>
-
-              <p className="mt-1 text-sm text-slate-200">
-                {admin?.lastLogin
-                  ? new Date(admin.lastLogin).toLocaleString()
-                  : "-"}
-              </p>
-            </div>
-          </div>
+      {/* LOADING */}
+      {loading && (
+        <div className="mt-5 flex items-center justify-center gap-2 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading dashboard...
         </div>
-      </main>
+      )}
     </div>
   );
 }
