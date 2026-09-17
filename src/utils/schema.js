@@ -21,7 +21,7 @@ const ImageSchema = new mongoose.Schema(
   },
   {
     _id: false,
-  }
+  },
 );
 
 /* ================================================================
@@ -67,7 +67,7 @@ const AdminSchema = new mongoose.Schema(
   {
     timestamps: true,
     versionKey: false,
-  }
+  },
 );
 
 /* ================================================================
@@ -158,7 +158,7 @@ const InquirySchema = new mongoose.Schema(
   {
     timestamps: true,
     versionKey: false,
-  }
+  },
 );
 
 /* ================================================================
@@ -261,7 +261,7 @@ const destinationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 /* ================================================================
@@ -398,7 +398,7 @@ const placeSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 /* ================================================================
@@ -519,7 +519,7 @@ const hotelSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 /* ================================================================
@@ -643,7 +643,7 @@ const restaurantSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 /* ================================================================
@@ -660,14 +660,7 @@ const transportationSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: [
-        "flight",
-        "train",
-        "bus",
-        "taxi",
-        "car-rental",
-        "bike-rental",
-      ],
+      enum: ["flight", "train", "bus", "taxi", "car-rental", "bike-rental"],
       required: true,
     },
 
@@ -742,7 +735,7 @@ const transportationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 /* ================================================================
@@ -870,7 +863,7 @@ const packageSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 /* ================================================================
@@ -989,7 +982,7 @@ const itinerarySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 /* ================================================================
@@ -1007,25 +1000,88 @@ export const Destination =
   mongoose.model("Destination", destinationSchema);
 
 export const Place =
-  mongoose.models.Place ||
-  mongoose.model("Place", placeSchema);
+  mongoose.models.Place || mongoose.model("Place", placeSchema);
 
 export const Hotel =
-  mongoose.models.Hotel ||
-  mongoose.model("Hotel", hotelSchema);
+  mongoose.models.Hotel || mongoose.model("Hotel", hotelSchema);
 
 export const Restaurant =
-  mongoose.models.Restaurant ||
-  mongoose.model("Restaurant", restaurantSchema);
+  mongoose.models.Restaurant || mongoose.model("Restaurant", restaurantSchema);
 
 export const Transportation =
   mongoose.models.Transportation ||
   mongoose.model("Transportation", transportationSchema);
 
 export const Package =
-  mongoose.models.Package ||
-  mongoose.model("Package", packageSchema);
+  mongoose.models.Package || mongoose.model("Package", packageSchema);
 
 export const Itinerary =
-  mongoose.models.Itinerary ||
-  mongoose.model("Itinerary", itinerarySchema);
+  mongoose.models.Itinerary || mongoose.model("Itinerary", itinerarySchema);
+
+
+
+
+
+/* =========================================================
+   REVIEW SCHEMA
+========================================================= */
+
+const ReviewSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, "Visitor name is required."],
+      trim: true,
+      maxlength: 100,
+    },
+
+    email: {
+      type: String,
+      required: [true, "Email is required."],
+      trim: true,
+      lowercase: true,
+      maxlength: 150,
+    },
+
+    rating: {
+      type: Number,
+      required: [true, "Rating is required."],
+      min: [1, "Rating must be at least 1."],
+      max: [5, "Rating cannot exceed 5."],
+    },
+
+    review: {
+      type: String,
+      required: [true, "Review message is required."],
+      trim: true,
+      minlength: 10,
+      maxlength: 1000,
+    },
+
+    destinationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Destination",
+      default: null,
+    },
+
+    packageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Package",
+      default: null,
+    },
+
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+  },
+  {
+    timestamps: true,
+    versionKey: false,
+  },
+);
+
+export const Review =
+  mongoose.models.Review ||
+  mongoose.model("Review", ReviewSchema);

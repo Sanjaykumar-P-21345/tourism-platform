@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
-
 import connectDB from "@/utils/mongodb";
 import { Destination, Package, Place } from "@/utils/schema";
 import { requireAdmin } from "@/utils/adminAuth";
