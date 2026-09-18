@@ -37,7 +37,13 @@ export default function ContactPage() {
     packageId: "",
   });
 
+  /* =========================================================
+     LOAD DESTINATIONS AND PACKAGES
+  ========================================================= */
+
   useEffect(() => {
+    let isMounted = true;
+
     async function loadOptions() {
       try {
         setLoadingOptions(true);
@@ -46,6 +52,8 @@ export default function ContactPage() {
           apiGet("/api/public/destinations"),
           apiGet("/api/public/packages"),
         ]);
+
+        if (!isMounted) return;
 
         setDestinations(
           Array.isArray(destinationResponse)
@@ -61,12 +69,22 @@ export default function ContactPage() {
       } catch (error) {
         console.error("Failed to load inquiry options:", error);
       } finally {
-        setLoadingOptions(false);
+        if (isMounted) {
+          setLoadingOptions(false);
+        }
       }
     }
 
     loadOptions();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  /* =========================================================
+     HANDLE INPUT CHANGE
+  ========================================================= */
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -75,7 +93,19 @@ export default function ContactPage() {
       ...previous,
       [name]: value,
     }));
+
+    if (errorMessage) {
+      setErrorMessage("");
+    }
+
+    if (successMessage) {
+      setSuccessMessage("");
+    }
   }
+
+  /* =========================================================
+     HANDLE FORM SUBMIT
+  ========================================================= */
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -83,13 +113,70 @@ export default function ContactPage() {
     setSuccessMessage("");
     setErrorMessage("");
 
-    if (
-      !formData.name.trim() ||
-      !formData.email.trim() ||
-      !formData.phone.trim() ||
-      !formData.message.trim()
-    ) {
+    const name = formData.name.trim();
+    const email = formData.email.trim().toLowerCase();
+    const phone = formData.phone.trim();
+    const subject = formData.subject.trim();
+    const message = formData.message.trim();
+
+    /* -------------------------------------------------------
+       REQUIRED FIELD VALIDATION
+    ------------------------------------------------------- */
+
+    if (!name || !email || !phone || !message) {
       setErrorMessage("Name, email, phone, and message are required.");
+
+      return;
+    }
+
+    /* -------------------------------------------------------
+       LENGTH VALIDATION
+    ------------------------------------------------------- */
+
+    if (name.length < 2) {
+      setErrorMessage("Name must be at least 2 characters.");
+
+      return;
+    }
+
+    if (name.length > 100) {
+      setErrorMessage("Name must not exceed 100 characters.");
+
+      return;
+    }
+
+    if (phone.length > 20) {
+      setErrorMessage("Phone number must not exceed 20 characters.");
+
+      return;
+    }
+
+    if (subject.length > 150) {
+      setErrorMessage("Subject must not exceed 150 characters.");
+
+      return;
+    }
+
+    if (message.length < 5) {
+      setErrorMessage("Message must be at least 5 characters.");
+
+      return;
+    }
+
+    if (message.length > 2000) {
+      setErrorMessage("Message must not exceed 2000 characters.");
+
+      return;
+    }
+
+    /* -------------------------------------------------------
+       EMAIL VALIDATION
+    ------------------------------------------------------- */
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(email)) {
+      setErrorMessage("Please enter a valid email address.");
 
       return;
     }
@@ -98,11 +185,11 @@ export default function ContactPage() {
       setSubmitting(true);
 
       const response = await apiPost("/api/inquiries", {
-        name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
-        subject: formData.subject.trim(),
-        message: formData.message.trim(),
+        name,
+        email,
+        phone,
+        subject,
+        message,
         destinationId: formData.destinationId || null,
         packageId: formData.packageId || null,
       });
@@ -135,12 +222,19 @@ export default function ContactPage() {
     }
   }
 
+  /* =========================================================
+     PAGE UI
+  ========================================================= */
+
   return (
     <>
       <Navbar />
 
       <main className="min-h-screen bg-slate-950 text-white">
-        {/* HERO */}
+        {/* =================================================
+            HERO SECTION
+        ================================================= */}
+
         <section className="border-b border-slate-800 bg-slate-900/60 px-4 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <Link
@@ -166,11 +260,17 @@ export default function ContactPage() {
           </div>
         </section>
 
-        {/* CONTENT */}
+        {/* =================================================
+            CONTENT SECTION
+        ================================================= */}
+
         <section className="px-4 py-12 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr]">
-            {/* CONTACT INFORMATION */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
+            {/* =================================================
+                CONTACT INFORMATION
+            ================================================= */}
+
+            <div className="h-fit rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
               <h2 className="text-2xl font-bold">Contact Information</h2>
 
               <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -179,6 +279,7 @@ export default function ContactPage() {
               </p>
 
               <div className="mt-8 space-y-6">
+                {/* Email */}
                 <div className="flex gap-4">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400">
                     <Mail size={20} />
@@ -186,12 +287,14 @@ export default function ContactPage() {
 
                   <div>
                     <h3 className="font-semibold">Email</h3>
+
                     <p className="mt-1 text-sm text-slate-400">
                       support@tourism.com
                     </p>
                   </div>
                 </div>
 
+                {/* Phone */}
                 <div className="flex gap-4">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400">
                     <Phone size={20} />
@@ -199,12 +302,14 @@ export default function ContactPage() {
 
                   <div>
                     <h3 className="font-semibold">Phone</h3>
+
                     <p className="mt-1 text-sm text-slate-400">
                       +91 98765 43210
                     </p>
                   </div>
                 </div>
 
+                {/* Location */}
                 <div className="flex gap-4">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400">
                     <MapPin size={20} />
@@ -212,12 +317,14 @@ export default function ContactPage() {
 
                   <div>
                     <h3 className="font-semibold">Location</h3>
+
                     <p className="mt-1 text-sm text-slate-400">
                       Tamil Nadu, India
                     </p>
                   </div>
                 </div>
 
+                {/* Visitor Support */}
                 <div className="flex gap-4">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600/15 text-indigo-400">
                     <MessageSquare size={20} />
@@ -225,6 +332,7 @@ export default function ContactPage() {
 
                   <div>
                     <h3 className="font-semibold">Visitor Support</h3>
+
                     <p className="mt-1 text-sm text-slate-400">
                       Ask about packages and destinations.
                     </p>
@@ -233,7 +341,10 @@ export default function ContactPage() {
               </div>
             </div>
 
-            {/* INQUIRY FORM */}
+            {/* =================================================
+                INQUIRY FORM
+            ================================================= */}
+
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
               <div className="mb-6">
                 <h2 className="text-2xl font-bold">Submit an Inquiry</h2>
@@ -243,21 +354,32 @@ export default function ContactPage() {
                 </p>
               </div>
 
+              {/* Success Message */}
               {successMessage && (
-                <div className="mb-5 flex gap-3 rounded-xl border border-emerald-800/60 bg-emerald-950/30 p-4 text-sm text-emerald-300">
+                <div
+                  role="alert"
+                  className="mb-5 flex gap-3 rounded-xl border border-emerald-800/60 bg-emerald-950/30 p-4 text-sm text-emerald-300"
+                >
                   <CheckCircle className="h-5 w-5 shrink-0" />
+
                   <span>{successMessage}</span>
                 </div>
               )}
 
+              {/* Error Message */}
               {errorMessage && (
-                <div className="mb-5 rounded-xl border border-red-800/60 bg-red-950/30 p-4 text-sm text-red-300">
+                <div
+                  role="alert"
+                  className="mb-5 rounded-xl border border-red-800/60 bg-red-950/30 p-4 text-sm text-red-300"
+                >
                   {errorMessage}
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} noValidate className="space-y-5">
+                {/* Name and Phone */}
                 <div className="grid gap-5 sm:grid-cols-2">
+                  {/* Name */}
                   <div>
                     <label
                       htmlFor="name"
@@ -273,11 +395,15 @@ export default function ContactPage() {
                       value={formData.name}
                       onChange={handleChange}
                       placeholder="Enter your name"
+                      minLength={2}
+                      maxLength={100}
                       required
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500"
+                      autoComplete="name"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
 
+                  {/* Phone */}
                   <div>
                     <label
                       htmlFor="phone"
@@ -293,12 +419,15 @@ export default function ContactPage() {
                       value={formData.phone}
                       onChange={handleChange}
                       placeholder="Enter phone number"
+                      maxLength={20}
                       required
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500"
+                      autoComplete="tel"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
                 </div>
 
+                {/* Email */}
                 <div>
                   <label
                     htmlFor="email"
@@ -314,11 +443,14 @@ export default function ContactPage() {
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="Enter your email"
+                    maxLength={150}
                     required
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500"
+                    autoComplete="email"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
 
+                {/* Destination */}
                 <div>
                   <label
                     htmlFor="destinationId"
@@ -332,8 +464,8 @@ export default function ContactPage() {
                     name="destinationId"
                     value={formData.destinationId}
                     onChange={handleChange}
-                    disabled={loadingOptions}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loadingOptions || submitting}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <option value="">
                       {loadingOptions
@@ -349,6 +481,7 @@ export default function ContactPage() {
                   </select>
                 </div>
 
+                {/* Package */}
                 <div>
                   <label
                     htmlFor="packageId"
@@ -362,8 +495,8 @@ export default function ContactPage() {
                     name="packageId"
                     value={formData.packageId}
                     onChange={handleChange}
-                    disabled={loadingOptions}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={loadingOptions || submitting}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <option value="">
                       {loadingOptions
@@ -373,12 +506,15 @@ export default function ContactPage() {
 
                     {packages.map((tourPackage) => (
                       <option key={tourPackage._id} value={tourPackage._id}>
-                        {tourPackage.name || tourPackage.title}
+                        {tourPackage.name ||
+                          tourPackage.title ||
+                          "Unnamed Package"}
                       </option>
                     ))}
                   </select>
                 </div>
 
+                {/* Subject */}
                 <div>
                   <label
                     htmlFor="subject"
@@ -394,10 +530,12 @@ export default function ContactPage() {
                     value={formData.subject}
                     onChange={handleChange}
                     placeholder="What is your inquiry about?"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500"
+                    maxLength={150}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
 
+                {/* Message */}
                 <div>
                   <label
                     htmlFor="message"
@@ -413,15 +551,22 @@ export default function ContactPage() {
                     onChange={handleChange}
                     placeholder="Write your inquiry..."
                     rows={5}
+                    minLength={5}
+                    maxLength={2000}
                     required
-                    className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500"
+                    className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   />
+
+                  <div className="mt-1 text-right text-xs text-slate-500">
+                    {formData.message.length}/2000 characters
+                  </div>
                 </div>
 
+                {/* Submit Button */}
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting ? (
                     <>
