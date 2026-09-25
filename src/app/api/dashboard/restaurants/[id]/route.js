@@ -1,38 +1,135 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
+
 import connectDB from "@/utils/mongodb";
 import { Destination, Restaurant } from "@/utils/schema";
+
 import { requireAdmin } from "@/utils/adminAuth";
+import cloudinary from "@/utils/cloudinary";
+
+/* ================================================================
+   CONSTANTS
+================================================================ */
+
+const ALLOWED_PRICE_RANGES = ["budget", "moderate", "expensive"];
+
+const ALLOWED_FOOD_TYPES = ["veg", "non-veg", "both"];
+
+/* ================================================================
+   IMAGE HELPERS
+================================================================ */
 
 function normalizeImage(image) {
-  if (!image) return null;
-
-  if (typeof image === "string") {
-    const url = image.trim();
-
-    if (!url) return null;
-
-    return {
-      url,
-      publicId: "",
-    };
+  if (!image || typeof image !== "object") {
+    return null;
   }
 
-  if (typeof image === "object" && image.url) {
-    return {
-      url: String(image.url).trim(),
-      publicId: String(image.publicId || "").trim(),
-    };
+  const url = String(image.url || "").trim();
+
+  const publicId = String(image.publicId || "").trim();
+
+  if (!url || !publicId) {
+    return null;
   }
 
-  return null;
+  return {
+    url,
+    publicId,
+  };
 }
 
 function normalizeGallery(gallery) {
-  if (!Array.isArray(gallery)) return [];
+  if (!Array.isArray(gallery)) {
+    return [];
+  }
 
   return gallery.map(normalizeImage).filter(Boolean);
 }
+
+/* ================================================================
+   STRING ARRAY HELPER
+================================================================ */
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+/* ================================================================
+   COORDINATE HELPER
+================================================================ */
+
+function parseCoordinate(value, fieldName) {
+  if (value === undefined || value === null || value === "") {
+    return {
+      value: undefined,
+      error: null,
+    };
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return {
+      value: undefined,
+      error: `${fieldName} must be a valid number`,
+    };
+  }
+
+  return {
+    value: number,
+    error: null,
+  };
+}
+
+/* ================================================================
+   CLOUDINARY PUBLIC IDS
+================================================================ */
+
+function getImagePublicIds(restaurant) {
+  const publicIds = [];
+
+  if (restaurant?.coverImage?.publicId) {
+    publicIds.push(restaurant.coverImage.publicId);
+  }
+
+  if (Array.isArray(restaurant?.gallery)) {
+    for (const image of restaurant.gallery) {
+      if (image?.publicId) {
+        publicIds.push(image.publicId);
+      }
+    }
+  }
+
+  return [...new Set(publicIds)];
+}
+
+/* ================================================================
+   CLOUDINARY CLEANUP
+================================================================ */
+
+async function deleteCloudinaryImages(publicIds) {
+  if (!publicIds.length) {
+    return;
+  }
+
+  for (const publicId of publicIds) {
+    try {
+      await cloudinary.uploader.destroy(publicId, {
+        resource_type: "image",
+      });
+    } catch (error) {
+      console.error(`Failed to delete Cloudinary image ${publicId}:`, error);
+    }
+  }
+}
+
+/* ================================================================
+   GET SINGLE RESTAURANT
+================================================================ */
 
 export async function GET(request, { params }) {
   try {
@@ -93,6 +190,10 @@ export async function GET(request, { params }) {
   }
 }
 
+/* ================================================================
+   UPDATE RESTAURANT
+================================================================ */
+
 export async function PUT(request, { params }) {
   try {
     const admin = await requireAdmin(request);
@@ -121,7 +222,27 @@ export async function PUT(request, { params }) {
 
     await connectDB();
 
+    /* ------------------------------------------------------------
+       LOAD EXISTING RESTAURANT
+    ------------------------------------------------------------ */
+
+    const existingRestaurant = await Restaurant.findById(id);
+
+    if (!existingRestaurant) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Restaurant not found",
+        },
+        { status: 404 },
+      );
+    }
+
     const body = await request.json();
+
+    /* ------------------------------------------------------------
+       ALLOWED FIELDS
+    ------------------------------------------------------------ */
 
     const allowedFields = [
       "destination",
@@ -154,7 +275,11 @@ export async function PUT(request, { params }) {
       }
     }
 
-    if (updateData.destination) {
+    /* ------------------------------------------------------------
+       DESTINATION
+    ------------------------------------------------------------ */
+
+    if (updateData.destination !== undefined) {
       if (!mongoose.Types.ObjectId.isValid(updateData.destination)) {
         return NextResponse.json(
           {
@@ -180,17 +305,45 @@ export async function PUT(request, { params }) {
       }
     }
 
+    /* ------------------------------------------------------------
+       NAME
+    ------------------------------------------------------------ */
+
     if (updateData.name !== undefined) {
-      updateData.name = updateData.name.trim();
+      updateData.name = String(updateData.name).trim();
+
+      if (!updateData.name) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Restaurant name is required",
+          },
+          { status: 400 },
+        );
+      }
     }
 
+    /* ------------------------------------------------------------
+       SLUG
+    ------------------------------------------------------------ */
+
     if (updateData.slug !== undefined) {
-      updateData.slug = updateData.slug.trim().toLowerCase();
+      updateData.slug = String(updateData.slug).trim().toLowerCase();
+
+      if (!updateData.slug) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Restaurant slug is required",
+          },
+          { status: 400 },
+        );
+      }
 
       const duplicate = await Restaurant.findOne({
         slug: updateData.slug,
         _id: { $ne: id },
-      });
+      }).lean();
 
       if (duplicate) {
         return NextResponse.json(
@@ -203,32 +356,102 @@ export async function PUT(request, { params }) {
       }
     }
 
+    /* ------------------------------------------------------------
+       DESCRIPTION
+    ------------------------------------------------------------ */
+
     if (updateData.description !== undefined) {
-      updateData.description = updateData.description.trim();
+      updateData.description = String(updateData.description).trim();
+
+      if (!updateData.description) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Restaurant description is required",
+          },
+          { status: 400 },
+        );
+      }
     }
+
+    /* ------------------------------------------------------------
+       CUISINES
+    ------------------------------------------------------------ */
 
     if (updateData.cuisines !== undefined) {
-      updateData.cuisines = Array.isArray(updateData.cuisines)
-        ? updateData.cuisines.filter(Boolean).map((item) => String(item).trim())
-        : [];
+      updateData.cuisines = normalizeStringArray(updateData.cuisines);
     }
 
-    if (updateData.popularDishes !== undefined) {
-      updateData.popularDishes = Array.isArray(updateData.popularDishes)
-        ? updateData.popularDishes
-            .filter(Boolean)
-            .map((item) => String(item).trim())
-        : [];
+    /* ------------------------------------------------------------
+       FOOD TYPE
+    ------------------------------------------------------------ */
+
+    if (updateData.foodType !== undefined) {
+      if (!ALLOWED_FOOD_TYPES.includes(updateData.foodType)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Food type must be veg, non-veg or both",
+          },
+          { status: 400 },
+        );
+      }
     }
+
+    /* ------------------------------------------------------------
+       PRICE RANGE
+    ------------------------------------------------------------ */
+
+    if (updateData.priceRange !== undefined) {
+      if (!ALLOWED_PRICE_RANGES.includes(updateData.priceRange)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Price range must be budget, moderate or expensive",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    /* ------------------------------------------------------------
+       POPULAR DISHES
+    ------------------------------------------------------------ */
+
+    if (updateData.popularDishes !== undefined) {
+      updateData.popularDishes = normalizeStringArray(updateData.popularDishes);
+    }
+
+    /* ------------------------------------------------------------
+       TEXT FIELDS
+    ------------------------------------------------------------ */
+
+    const textFields = [
+      "openingTime",
+      "closingTime",
+      "address",
+      "contactPhone",
+      "website",
+    ];
+
+    for (const field of textFields) {
+      if (updateData[field] !== undefined) {
+        updateData[field] = String(updateData[field] || "").trim();
+      }
+    }
+
+    /* ------------------------------------------------------------
+       COVER IMAGE
+    ------------------------------------------------------------ */
 
     if (updateData.coverImage !== undefined) {
       const image = normalizeImage(updateData.coverImage);
 
-      if (!image?.url) {
+      if (!image) {
         return NextResponse.json(
           {
             success: false,
-            message: "Valid cover image is required",
+            message: "Valid cover image with Cloudinary publicId is required",
           },
           { status: 400 },
         );
@@ -237,14 +460,22 @@ export async function PUT(request, { params }) {
       updateData.coverImage = image;
     }
 
+    /* ------------------------------------------------------------
+       GALLERY
+    ------------------------------------------------------------ */
+
     if (updateData.gallery !== undefined) {
       updateData.gallery = normalizeGallery(updateData.gallery);
     }
 
+    /* ------------------------------------------------------------
+       RATING
+    ------------------------------------------------------------ */
+
     if (updateData.rating !== undefined) {
       const rating = Number(updateData.rating);
 
-      if (Number.isNaN(rating) || rating < 0 || rating > 5) {
+      if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
         return NextResponse.json(
           {
             success: false,
@@ -257,24 +488,72 @@ export async function PUT(request, { params }) {
       updateData.rating = rating;
     }
 
-    if (updateData.latitude === "") {
-      updateData.latitude = undefined;
-    } else if (updateData.latitude !== undefined) {
-      updateData.latitude = Number(updateData.latitude);
+    /* ------------------------------------------------------------
+       LATITUDE
+    ------------------------------------------------------------ */
+
+    if (updateData.latitude !== undefined) {
+      const result = parseCoordinate(updateData.latitude, "Latitude");
+
+      if (result.error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: result.error,
+          },
+          { status: 400 },
+        );
+      }
+
+      updateData.latitude = result.value;
     }
 
-    if (updateData.longitude === "") {
-      updateData.longitude = undefined;
-    } else if (updateData.longitude !== undefined) {
-      updateData.longitude = Number(updateData.longitude);
+    /* ------------------------------------------------------------
+       LONGITUDE
+    ------------------------------------------------------------ */
+
+    if (updateData.longitude !== undefined) {
+      const result = parseCoordinate(updateData.longitude, "Longitude");
+
+      if (result.error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: result.error,
+          },
+          { status: 400 },
+        );
+      }
+
+      updateData.longitude = result.value;
     }
 
-    const restaurant = await Restaurant.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    /* ------------------------------------------------------------
+       BOOLEAN VALUES
+    ------------------------------------------------------------ */
 
-    if (!restaurant) {
+    if (updateData.isFeatured !== undefined) {
+      updateData.isFeatured = Boolean(updateData.isFeatured);
+    }
+
+    if (updateData.isActive !== undefined) {
+      updateData.isActive = Boolean(updateData.isActive);
+    }
+
+    /* ------------------------------------------------------------
+       UPDATE DATABASE
+    ------------------------------------------------------------ */
+
+    const updatedRestaurant = await Restaurant.findByIdAndUpdate(
+      id,
+      updateData,
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!updatedRestaurant) {
       return NextResponse.json(
         {
           success: false,
@@ -284,23 +563,61 @@ export async function PUT(request, { params }) {
       );
     }
 
+    /* ------------------------------------------------------------
+       FIND REMOVED CLOUDINARY IMAGES
+    ------------------------------------------------------------ */
+
+    const oldPublicIds = getImagePublicIds(existingRestaurant);
+
+    const newPublicIds = getImagePublicIds(updatedRestaurant);
+
+    const newPublicIdSet = new Set(newPublicIds);
+
+    const removedPublicIds = oldPublicIds.filter(
+      (publicId) => !newPublicIdSet.has(publicId),
+    );
+
+    /* ------------------------------------------------------------
+       CLEAN UP OLD CLOUDINARY IMAGES
+    ------------------------------------------------------------ */
+
+    await deleteCloudinaryImages(removedPublicIds);
+
+    /* ------------------------------------------------------------
+       RESPONSE
+    ------------------------------------------------------------ */
+
     return NextResponse.json({
       success: true,
       message: "Restaurant updated successfully",
-      data: restaurant,
+      data: updatedRestaurant,
     });
   } catch (error) {
     console.error("PUT restaurant error:", error);
 
+    if (error?.code === 11000) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Restaurant slug already exists",
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to update restaurant",
+        message: error?.message || "Failed to update restaurant",
       },
       { status: 500 },
     );
   }
 }
+
+/* ================================================================
+   PERMANENT DELETE RESTAURANT
+================================================================ */
 
 export async function DELETE(request, { params }) {
   try {
@@ -330,16 +647,11 @@ export async function DELETE(request, { params }) {
 
     await connectDB();
 
-    const restaurant = await Restaurant.findByIdAndUpdate(
-      id,
-      {
-        isActive: false,
-      },
-      {
-        new: true,
-        runValidators: true,
-      },
-    );
+    /* ------------------------------------------------------------
+       FIND RESTAURANT FIRST
+    ------------------------------------------------------------ */
+
+    const restaurant = await Restaurant.findById(id);
 
     if (!restaurant) {
       return NextResponse.json(
@@ -351,10 +663,27 @@ export async function DELETE(request, { params }) {
       );
     }
 
+    /* ------------------------------------------------------------
+       COLLECT CLOUDINARY IMAGES
+    ------------------------------------------------------------ */
+
+    const publicIds = getImagePublicIds(restaurant);
+
+    /* ------------------------------------------------------------
+       PERMANENT DATABASE DELETE
+    ------------------------------------------------------------ */
+
+    await Restaurant.findByIdAndDelete(id);
+
+    /* ------------------------------------------------------------
+       DELETE CLOUDINARY FILES
+    ------------------------------------------------------------ */
+
+    await deleteCloudinaryImages(publicIds);
+
     return NextResponse.json({
       success: true,
-      message: "Restaurant deactivated successfully",
-      data: restaurant,
+      message: "Restaurant deleted permanently",
     });
   } catch (error) {
     console.error("DELETE restaurant error:", error);
@@ -362,7 +691,7 @@ export async function DELETE(request, { params }) {
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to deactivate restaurant",
+        message: "Failed to delete restaurant",
       },
       { status: 500 },
     );

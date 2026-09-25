@@ -2,7 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Loader2, X } from "lucide-react";
+import {
+  ImagePlus,
+  Loader2,
+  X,
+  MapPin,
+  Image as ImageIcon,
+  Settings,
+  FileText,
+  Info,
+} from "lucide-react";
 
 import { adminApi } from "@/utils/adminApi";
 import { getToken } from "@/utils/api";
@@ -13,58 +22,33 @@ export default function DestinationForm({
   initialValues = null,
   destinationId = null,
   mode = "create",
+  onSuccess = null,
 }) {
   const router = useRouter();
 
   /*
-   * Support both prop names:
-   *
-   * initialData
-   * initialValues
+   * =========================================================
+   * DESTINATION DATA
+   * =========================================================
    */
+
   const destination = initialData || initialValues || null;
 
-  /*
-   * Get ID from either:
-   *
-   * destinationId
-   * destination._id
-   * destination.id
-   */
-  const id =
-    destinationId ||
-    destination?._id ||
-    destination?.id ||
-    null;
+  const id = destinationId || destination?._id || destination?.id || null;
 
   const galleryInputRef = useRef(null);
 
-  const [loading, setLoading] = useState(false);
-  const [galleryUploading, setGalleryUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [galleryError, setGalleryError] = useState("");
-
   /*
    * =========================================================
-   * FORM DATA
+   * STATE
    * =========================================================
-   *
-   * Cloudinary image structure:
-   *
-   * coverImage:
-   * {
-   *   url: "...",
-   *   publicId: "..."
-   * }
-   *
-   * gallery:
-   * [
-   *   {
-   *     url: "...",
-   *     publicId: "..."
-   *   }
-   * ]
    */
+
+  const [loading, setLoading] = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
+
+  const [error, setError] = useState("");
+  const [galleryError, setGalleryError] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -86,19 +70,23 @@ export default function DestinationForm({
     isActive: true,
   });
 
-  /* =========================================================
-     IMAGE NORMALIZATION
-     ========================================================= */
+  /*
+   * =========================================================
+   * IMAGE NORMALIZATION
+   * =========================================================
+   */
 
   function normalizeImage(image) {
     /*
-     * New Cloudinary format
+     * New Cloudinary object:
+     *
+     * {
+     *   url: "...",
+     *   publicId: "..."
+     * }
      */
-    if (
-      image &&
-      typeof image === "object" &&
-      image.url
-    ) {
+
+    if (image && typeof image === "object" && image.url) {
       return {
         url: image.url,
         publicId: image.publicId || "",
@@ -106,17 +94,9 @@ export default function DestinationForm({
     }
 
     /*
-     * Legacy string format.
-     *
-     * This allows old database records containing:
-     *
-     * "https://example.com/image.jpg"
-     *
-     * to still display in the form.
-     *
-     * However, newly uploaded images always use
-     * the Cloudinary object format.
+     * Legacy URL-only image.
      */
+
     if (typeof image === "string" && image.trim()) {
       return {
         url: image.trim(),
@@ -132,14 +112,14 @@ export default function DestinationForm({
       return [];
     }
 
-    return gallery
-      .map((image) => normalizeImage(image))
-      .filter(Boolean);
+    return gallery.map((image) => normalizeImage(image)).filter(Boolean);
   }
 
-  /* =========================================================
-     LOAD INITIAL DATA
-     ========================================================= */
+  /*
+   * =========================================================
+   * LOAD INITIAL DATA
+   * =========================================================
+   */
 
   useEffect(() => {
     if (!destination) {
@@ -157,85 +137,52 @@ export default function DestinationForm({
 
       state: destination.state || "",
 
-      description:
-        destination.description || "",
+      description: destination.description || "",
 
-      shortDescription:
-        destination.shortDescription || "",
+      shortDescription: destination.shortDescription || "",
 
-      bestTimeToVisit:
-        destination.bestTimeToVisit || "",
+      bestTimeToVisit: destination.bestTimeToVisit || "",
 
-      language:
-        destination.language || "",
+      language: destination.language || "",
 
-      currency:
-        destination.currency || "",
+      currency: destination.currency || "",
 
-      /*
-       * Convert old string OR new object
-       * into the format used by ImageUpload.
-       */
-      coverImage:
-        normalizeImage(
-          destination.coverImage,
-        ),
+      coverImage: normalizeImage(destination.coverImage),
 
-      /*
-       * Convert gallery into:
-       *
-       * [
-       *   { url, publicId },
-       *   ...
-       * ]
-       */
-      gallery:
-        normalizeGallery(
-          destination.gallery,
-        ),
+      gallery: normalizeGallery(destination.gallery),
 
-      latitude:
-        destination.latitude ?? "",
+      latitude: destination.latitude ?? "",
 
-      longitude:
-        destination.longitude ?? "",
+      longitude: destination.longitude ?? "",
 
-      address:
-        destination.address || "",
+      address: destination.address || "",
 
-      isFeatured:
-        Boolean(destination.isFeatured),
+      isFeatured: Boolean(destination.isFeatured),
 
-      isActive:
-        destination.isActive ?? true,
+      isActive: destination.isActive ?? true,
     });
   }, [destination]);
 
-  /* =========================================================
-     HANDLE INPUT CHANGE
-     ========================================================= */
+  /*
+   * =========================================================
+   * INPUT CHANGE
+   * =========================================================
+   */
 
   function handleChange(event) {
-    const {
-      name,
-      value,
-      type,
-      checked,
-    } = event.target;
+    const { name, value, type, checked } = event.target;
 
     setFormData((previous) => ({
       ...previous,
-
-      [name]:
-        type === "checkbox"
-          ? checked
-          : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
   }
 
-  /* =========================================================
-     GENERATE SLUG
-     ========================================================= */
+  /*
+   * =========================================================
+   * GENERATE SLUG
+   * =========================================================
+   */
 
   function generateSlug() {
     const slug = formData.name
@@ -251,14 +198,14 @@ export default function DestinationForm({
     }));
   }
 
-  /* =========================================================
-     UPLOAD GALLERY IMAGE
-     ========================================================= */
+  /*
+   * =========================================================
+   * GALLERY UPLOAD
+   * =========================================================
+   */
 
   async function handleGalleryUpload(event) {
-    const files = Array.from(
-      event.target.files || [],
-    );
+    const files = Array.from(event.target.files || []);
 
     if (!files.length) {
       return;
@@ -271,25 +218,25 @@ export default function DestinationForm({
       const token = getToken();
 
       if (!token) {
-        throw new Error(
-          "Admin session not found. Please log in again.",
-        );
+        throw new Error("Admin session not found. Please log in again.");
       }
+
+      const allowedTypes = [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+      ];
+
+      const maxSize = 10 * 1024 * 1024;
 
       const uploadedImages = [];
 
       for (const file of files) {
         /*
-         * Client-side validation
+         * Validate type.
          */
-
-        const allowedTypes = [
-          "image/jpeg",
-          "image/jpg",
-          "image/png",
-          "image/webp",
-          "image/gif",
-        ];
 
         if (!allowedTypes.includes(file.type)) {
           throw new Error(
@@ -297,41 +244,29 @@ export default function DestinationForm({
           );
         }
 
-        const maxSize =
-          10 * 1024 * 1024;
+        /*
+         * Validate size.
+         */
 
         if (file.size > maxSize) {
-          throw new Error(
-            `${file.name}: Image size cannot exceed 10 MB.`,
-          );
+          throw new Error(`${file.name}: Image size cannot exceed 10 MB.`);
         }
 
-        const formDataUpload =
-          new FormData();
+        const uploadFormData = new FormData();
 
-        formDataUpload.append(
-          "file",
-          file,
-        );
+        uploadFormData.append("file", file);
 
-        formDataUpload.append(
-          "folder",
-          "tourism/destinations/gallery",
-        );
+        uploadFormData.append("folder", "tourism/destinations/gallery");
 
-        const response = await fetch(
-          "/api/upload",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            body: formDataUpload,
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-        );
+          body: uploadFormData,
+        });
 
-        const data =
-          await response.json();
+        const data = await response.json();
 
         if (response.status === 401) {
           throw new Error(
@@ -339,14 +274,8 @@ export default function DestinationForm({
           );
         }
 
-        if (
-          !response.ok ||
-          !data.success
-        ) {
-          throw new Error(
-            data?.message ||
-              `Failed to upload ${file.name}`,
-          );
+        if (!response.ok || !data.success) {
+          throw new Error(data?.message || `Failed to upload ${file.name}`);
         }
 
         if (!data.image?.url) {
@@ -357,56 +286,46 @@ export default function DestinationForm({
 
         uploadedImages.push({
           url: data.image.url,
-          publicId:
-            data.image.publicId || "",
+          publicId: data.image.publicId || "",
         });
       }
 
       /*
-       * Add uploaded images to existing gallery.
+       * Add newly uploaded images.
        */
 
       setFormData((previous) => ({
         ...previous,
-
-        gallery: [
-          ...previous.gallery,
-          ...uploadedImages,
-        ],
+        gallery: [...previous.gallery, ...uploadedImages],
       }));
     } catch (uploadError) {
-      console.error(
-        "Gallery upload error:",
-        uploadError,
-      );
+      console.error("Gallery upload error:", uploadError);
 
       setGalleryError(
-        uploadError?.message ||
-          "Failed to upload gallery image.",
+        uploadError?.message || "Failed to upload gallery image.",
       );
     } finally {
       setGalleryUploading(false);
 
       /*
        * Reset input so the same file
-       * can be selected again if needed.
+       * can be selected again.
        */
+
       if (galleryInputRef.current) {
-        galleryInputRef.current.value =
-          "";
+        galleryInputRef.current.value = "";
       }
     }
   }
 
-  /* =========================================================
-     REMOVE GALLERY IMAGE
-     ========================================================= */
+  /*
+   * =========================================================
+   * REMOVE GALLERY IMAGE
+   * =========================================================
+   */
 
-  async function handleRemoveGalleryImage(
-    index,
-  ) {
-    const image =
-      formData.gallery[index];
+  async function handleRemoveGalleryImage(index) {
+    const image = formData.gallery[index];
 
     if (!image) {
       return;
@@ -415,12 +334,8 @@ export default function DestinationForm({
     setGalleryError("");
 
     /*
-     * Remove from Cloudinary when a
-     * publicId exists.
-     *
-     * Legacy URL-only images do not have
-     * a publicId, so only remove them from
-     * the form.
+     * If this is a Cloudinary image,
+     * remove it from Cloudinary first.
      */
 
     if (image.publicId) {
@@ -428,49 +343,32 @@ export default function DestinationForm({
         const token = getToken();
 
         if (!token) {
-          throw new Error(
-            "Admin session not found. Please log in again.",
-          );
+          throw new Error("Admin session not found. Please log in again.");
         }
 
-        const response =
-          await fetch(
-            "/api/upload/delete",
-            {
-              method: "DELETE",
-              headers: {
-                "Content-Type":
-                  "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                publicId:
-                  image.publicId,
-              }),
-            },
-          );
+        const response = await fetch("/api/upload/delete", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
 
-        const data =
-          await response.json();
+            Authorization: `Bearer ${token}`,
+          },
 
-        if (
-          !response.ok ||
-          !data.success
-        ) {
-          throw new Error(
-            data?.message ||
-              "Failed to delete image.",
-          );
+          body: JSON.stringify({
+            publicId: image.publicId,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data?.message || "Failed to delete image.");
         }
       } catch (deleteError) {
-        console.error(
-          "Gallery image delete error:",
-          deleteError,
-        );
+        console.error("Gallery image delete error:", deleteError);
 
         setGalleryError(
-          deleteError?.message ||
-            "Failed to delete gallery image.",
+          deleteError?.message || "Failed to delete gallery image.",
         );
 
         return;
@@ -478,287 +376,250 @@ export default function DestinationForm({
     }
 
     /*
-     * Remove image from form state.
+     * Remove from local form state.
      */
 
     setFormData((previous) => ({
       ...previous,
 
-      gallery: previous.gallery.filter(
-        (_, imageIndex) =>
-          imageIndex !== index,
-      ),
+      gallery: previous.gallery.filter((_, imageIndex) => imageIndex !== index),
     }));
   }
 
-  /* =========================================================
-     BUILD PAYLOAD
-     * ========================================================= */
+  /*
+   * =========================================================
+   * BUILD PAYLOAD
+   * =========================================================
+   */
 
   function buildPayload() {
     const payload = {
       name: formData.name.trim(),
 
-      slug: formData.slug
-        .trim()
-        .toLowerCase(),
+      slug: formData.slug.trim().toLowerCase(),
 
       type: formData.type,
 
-      country:
-        formData.country.trim(),
+      country: formData.country.trim(),
 
-      description:
-        formData.description.trim(),
+      description: formData.description.trim(),
 
       /*
-       * Cloudinary cover image object
+       * Cover image.
        */
+
       coverImage: formData.coverImage
         ? {
             url: formData.coverImage.url,
-            publicId:
-              formData.coverImage
-                .publicId || "",
+
+            publicId: formData.coverImage.publicId || "",
           }
         : null,
 
       /*
-       * Cloudinary gallery objects
+       * Gallery.
        */
+
       gallery: formData.gallery
-        .filter(
-          (image) =>
-            image &&
-            image.url,
-        )
+        .filter((image) => image && image.url)
         .map((image) => ({
           url: image.url,
-          publicId:
-            image.publicId || "",
+
+          publicId: image.publicId || "",
         })),
 
-      isFeatured:
-        Boolean(formData.isFeatured),
+      isFeatured: Boolean(formData.isFeatured),
 
-      isActive:
-        Boolean(formData.isActive),
+      isActive: Boolean(formData.isActive),
     };
 
-    /* =======================================================
-       OPTIONAL STRING FIELDS
-       ======================================================= */
+    /*
+     * Optional strings.
+     */
 
     if (formData.state.trim()) {
-      payload.state =
-        formData.state.trim();
+      payload.state = formData.state.trim();
     }
 
-    if (
-      formData.shortDescription.trim()
-    ) {
-      payload.shortDescription =
-        formData.shortDescription.trim();
+    if (formData.shortDescription.trim()) {
+      payload.shortDescription = formData.shortDescription.trim();
     }
 
-    if (
-      formData.bestTimeToVisit.trim()
-    ) {
-      payload.bestTimeToVisit =
-        formData.bestTimeToVisit.trim();
+    if (formData.bestTimeToVisit.trim()) {
+      payload.bestTimeToVisit = formData.bestTimeToVisit.trim();
     }
 
     if (formData.language.trim()) {
-      payload.language =
-        formData.language.trim();
+      payload.language = formData.language.trim();
     }
 
     if (formData.currency.trim()) {
-      payload.currency =
-        formData.currency.trim();
+      payload.currency = formData.currency.trim();
     }
 
     if (formData.address.trim()) {
-      payload.address =
-        formData.address.trim();
+      payload.address = formData.address.trim();
     }
 
-    /* =======================================================
-       LATITUDE
-       ======================================================= */
+    /*
+     * Latitude.
+     */
 
-    if (formData.latitude !== "") {
-      const latitude = Number(
-        formData.latitude,
-      );
+    if (
+      formData.latitude !== "" &&
+      formData.latitude !== null &&
+      formData.latitude !== undefined
+    ) {
+      const latitude = Number(formData.latitude);
 
-      if (!Number.isNaN(latitude)) {
-        payload.latitude = latitude;
+      if (Number.isNaN(latitude)) {
+        throw new Error("Latitude must be a valid number.");
       }
+
+      payload.latitude = latitude;
     }
 
-    /* =======================================================
-       LONGITUDE
-       ======================================================= */
+    /*
+     * Longitude.
+     */
 
-    if (formData.longitude !== "") {
-      const longitude = Number(
-        formData.longitude,
-      );
+    if (
+      formData.longitude !== "" &&
+      formData.longitude !== null &&
+      formData.longitude !== undefined
+    ) {
+      const longitude = Number(formData.longitude);
 
-      if (!Number.isNaN(longitude)) {
-        payload.longitude = longitude;
+      if (Number.isNaN(longitude)) {
+        throw new Error("Longitude must be a valid number.");
       }
+
+      payload.longitude = longitude;
     }
 
     return payload;
   }
 
-  /* =========================================================
-     SUBMIT
-     ========================================================= */
+  /*
+   * =========================================================
+   * SUBMIT
+   * =========================================================
+   */
 
   async function handleSubmit(event) {
     event.preventDefault();
 
     setError("");
 
-    /* -------------------------------------------------------
-       VALIDATION
-       ------------------------------------------------------- */
+    /*
+     * -----------------------------------------
+     * VALIDATION
+     * -----------------------------------------
+     */
 
     if (!formData.name.trim()) {
-      setError(
-        "Destination name is required.",
-      );
+      setError("Destination name is required.");
       return;
     }
 
     if (!formData.slug.trim()) {
-      setError(
-        "Destination slug is required.",
-      );
+      setError("Destination slug is required.");
       return;
     }
 
     if (!formData.country.trim()) {
-      setError(
-        "Country is required.",
-      );
+      setError("Country is required.");
       return;
     }
 
     if (!formData.description.trim()) {
-      setError(
-        "Description is required.",
-      );
+      setError("Description is required.");
+      return;
+    }
+
+    if (!formData.coverImage?.url) {
+      setError("Cover image is required. Please upload an image.");
       return;
     }
 
     /*
-     * Cover image is now an object,
-     * not a URL string.
-     */
-
-    if (
-      !formData.coverImage?.url
-    ) {
-      setError(
-        "Cover image is required. Please upload an image.",
-      );
-      return;
-    }
-
-    /*
-     * Make sure edit mode has an ID.
+     * Edit mode requires an ID.
      */
 
     if (mode === "edit" && !id) {
-      setError(
-        "Destination ID is missing. Cannot update destination.",
-      );
+      setError("Destination ID is missing. Cannot update destination.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const payload =
-        buildPayload();
+      const payload = buildPayload();
 
-      console.log(
-        "Destination payload:",
-        payload,
-      );
+      console.log("Destination payload:", payload);
 
-      /* =====================================================
-         CREATE
-         ===================================================== */
+      let response;
+
+      /*
+       * -----------------------------------------
+       * CREATE
+       * -----------------------------------------
+       */
 
       if (mode === "create") {
-        const response =
-          await adminApi.post(
-            "/api/dashboard/destinations",
-            payload,
-          );
-
-        console.log(
-          "Destination created:",
-          response,
-        );
-
-        if (!response?.success) {
-          throw new Error(
-            response?.message ||
-              "Failed to create destination.",
-          );
-        }
-
-        router.push(
-          "/admin/dashboard/destinations",
-        );
-
-        router.refresh();
-
-        return;
+        response = await adminApi.post("/api/dashboard/destinations", payload);
       }
 
-      /* =====================================================
-         UPDATE
-         ===================================================== */
+      /*
+       * -----------------------------------------
+       * UPDATE
+       * -----------------------------------------
+       */
 
       if (mode === "edit") {
-        const response =
-          await adminApi.put(
-            `/api/dashboard/destinations/${id}`,
-            payload,
-          );
-
-        console.log(
-          "Destination updated:",
-          response,
+        response = await adminApi.put(
+          `/api/dashboard/destinations/${id}`,
+          payload,
         );
+      }
 
-        if (!response?.success) {
-          throw new Error(
-            response?.message ||
-              "Failed to update destination.",
-          );
-        }
+      /*
+       * -----------------------------------------
+       * VALIDATE RESPONSE
+       * -----------------------------------------
+       */
 
-        router.push(
-          "/admin/dashboard/destinations",
-        );
+      if (!response?.success) {
+        throw new Error(response?.message || "Failed to save destination.");
+      }
 
-        router.refresh();
+      /*
+       * -----------------------------------------
+       * MODAL MODE
+       * -----------------------------------------
+       *
+       * When this form is inside the
+       * destination edit modal, the parent
+       * handles closing and refreshing.
+       */
+
+      if (typeof onSuccess === "function") {
+        await onSuccess(response);
 
         return;
       }
+
+      /*
+       * -----------------------------------------
+       * STANDALONE PAGE MODE
+       * -----------------------------------------
+       */
+
+      router.push("/admin/dashboard/destinations");
+
+      router.refresh();
     } catch (saveError) {
-      console.error(
-        "Destination save error:",
-        saveError,
-      );
+      console.error("Destination save error:", saveError);
 
       setError(
         saveError?.data?.message ||
@@ -770,24 +631,41 @@ export default function DestinationForm({
     }
   }
 
-  /* =========================================================
-     UI
-     ========================================================= */
+  /*
+   * =========================================================
+   * INPUT CLASS
+   * =========================================================
+   */
+
+  const inputClass =
+    "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 disabled:cursor-not-allowed disabled:bg-slate-50";
+
+  /*
+   * =========================================================
+   * SECTION CLASS
+   * =========================================================
+   */
+
+  const sectionClass =
+    "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6";
+
+  /*
+   * =========================================================
+   * UI
+   * =========================================================
+   */
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-6"
-    >
+    <form onSubmit={handleSubmit} className="space-y-6">
       {/* =====================================================
           ERROR
           ===================================================== */}
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">
-            {error}
-          </p>
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+          <Info size={18} className="mt-0.5 shrink-0 text-red-600" />
+
+          <p className="text-sm font-medium text-red-700">{error}</p>
         </div>
       )}
 
@@ -795,16 +673,28 @@ export default function DestinationForm({
           BASIC INFORMATION
           ===================================================== */}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-5 text-lg font-semibold text-slate-900">
-          Basic Information
-        </h2>
+      <section className={sectionClass}>
+        <div className="mb-6 flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <FileText size={20} />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">
+              Basic Information
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Add the main information about this destination.
+            </p>
+          </div>
+        </div>
 
         <div className="grid gap-5 md:grid-cols-2">
           {/* NAME */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Destination Name *
             </label>
 
@@ -815,14 +705,14 @@ export default function DestinationForm({
               onChange={handleChange}
               placeholder="Example: Chennai"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
 
           {/* SLUG */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Slug *
             </label>
 
@@ -834,17 +724,14 @@ export default function DestinationForm({
                 onChange={handleChange}
                 placeholder="chennai"
                 disabled={loading}
-                className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                className={`${inputClass} min-w-0 flex-1`}
               />
 
               <button
                 type="button"
                 onClick={generateSlug}
-                disabled={
-                  loading ||
-                  !formData.name.trim()
-                }
-                className="rounded-lg bg-slate-100 px-4 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                disabled={loading || !formData.name.trim()}
+                className="shrink-0 rounded-xl bg-emerald-50 px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Generate
               </button>
@@ -854,7 +741,7 @@ export default function DestinationForm({
           {/* TYPE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Type *
             </label>
 
@@ -863,30 +750,22 @@ export default function DestinationForm({
               value={formData.type}
               onChange={handleChange}
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             >
-              <option value="country">
-                Country
-              </option>
+              <option value="country">Country</option>
 
-              <option value="state">
-                State
-              </option>
+              <option value="state">State</option>
 
-              <option value="city">
-                City
-              </option>
+              <option value="city">City</option>
 
-              <option value="region">
-                Region
-              </option>
+              <option value="region">Region</option>
             </select>
           </div>
 
           {/* COUNTRY */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Country *
             </label>
 
@@ -897,14 +776,14 @@ export default function DestinationForm({
               onChange={handleChange}
               placeholder="India"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
 
           {/* STATE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               State
             </label>
 
@@ -915,14 +794,14 @@ export default function DestinationForm({
               onChange={handleChange}
               placeholder="Tamil Nadu"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
 
           {/* LANGUAGE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Language
             </label>
 
@@ -933,14 +812,14 @@ export default function DestinationForm({
               onChange={handleChange}
               placeholder="Tamil, English"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
 
           {/* CURRENCY */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Currency
             </label>
 
@@ -951,66 +830,73 @@ export default function DestinationForm({
               onChange={handleChange}
               placeholder="INR"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
 
           {/* BEST TIME */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Best Time To Visit
             </label>
 
             <input
               type="text"
               name="bestTimeToVisit"
-              value={
-                formData.bestTimeToVisit
-              }
+              value={formData.bestTimeToVisit}
               onChange={handleChange}
               placeholder="October to March"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {/* =====================================================
           DESCRIPTION
           ===================================================== */}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-5 text-lg font-semibold text-slate-900">
-          Description
-        </h2>
+      <section className={sectionClass}>
+        <div className="mb-6 flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <FileText size={20} />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Description</h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Provide useful information visitors should know about this
+              destination.
+            </p>
+          </div>
+        </div>
 
         <div className="space-y-5">
           {/* SHORT DESCRIPTION */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Short Description
             </label>
 
             <input
               type="text"
               name="shortDescription"
-              value={
-                formData.shortDescription
-              }
+              value={formData.shortDescription}
               onChange={handleChange}
               placeholder="A short description of the destination"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
 
           {/* FULL DESCRIPTION */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Full Description *
             </label>
 
@@ -1021,26 +907,36 @@ export default function DestinationForm({
               rows={7}
               placeholder="Write a detailed description..."
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={`${inputClass} resize-y`}
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {/* =====================================================
           LOCATION
           ===================================================== */}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-5 text-lg font-semibold text-slate-900">
-          Location
-        </h2>
+      <section className={sectionClass}>
+        <div className="mb-6 flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <MapPin size={20} />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Location</h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Add address and map coordinates.
+            </p>
+          </div>
+        </div>
 
         <div className="grid gap-5 md:grid-cols-2">
           {/* ADDRESS */}
 
           <div className="md:col-span-2">
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Address
             </label>
 
@@ -1051,14 +947,14 @@ export default function DestinationForm({
               onChange={handleChange}
               placeholder="Destination address"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
 
           {/* LATITUDE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Latitude
             </label>
 
@@ -1070,14 +966,14 @@ export default function DestinationForm({
               onChange={handleChange}
               placeholder="13.0827"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
 
           {/* LONGITUDE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
               Longitude
             </label>
 
@@ -1089,25 +985,33 @@ export default function DestinationForm({
               onChange={handleChange}
               placeholder="80.2707"
               disabled={loading}
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className={inputClass}
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {/* =====================================================
           IMAGES
           ===================================================== */}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-5 text-lg font-semibold text-slate-900">
-          Images
-        </h2>
+      <section className={sectionClass}>
+        <div className="mb-6 flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <ImageIcon size={20} />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Images</h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Add a cover image and gallery images for the destination.
+            </p>
+          </div>
+        </div>
 
         <div className="space-y-8">
-          {/* =================================================
-              COVER IMAGE
-              ================================================= */}
+          {/* COVER IMAGE */}
 
           <div>
             <ImageUpload
@@ -1115,25 +1019,20 @@ export default function DestinationForm({
               required
               value={formData.coverImage}
               onChange={(image) =>
-                setFormData(
-                  (previous) => ({
-                    ...previous,
-                    coverImage:
-                      image,
-                  }),
-                )
+                setFormData((previous) => ({
+                  ...previous,
+                  coverImage: image,
+                }))
               }
               folder="tourism/destinations/covers"
             />
           </div>
 
-          {/* =================================================
-              GALLERY
-              ================================================= */}
+          {/* GALLERY */}
 
           <div>
-            <div className="mb-2">
-              <label className="block text-sm font-medium text-slate-700">
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-slate-700">
                 Gallery Images
               </label>
 
@@ -1142,38 +1041,29 @@ export default function DestinationForm({
               </p>
             </div>
 
-            {/* UPLOAD BUTTON */}
-
             <input
               ref={galleryInputRef}
               type="file"
               accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
               multiple
-              onChange={
-                handleGalleryUpload
-              }
+              onChange={handleGalleryUpload}
               className="hidden"
             />
 
             <button
               type="button"
-              onClick={() =>
-                galleryInputRef.current?.click()
-              }
-              disabled={
-                loading ||
-                galleryUploading
-              }
-              className="flex min-h-36 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-8 transition hover:border-indigo-400 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={loading || galleryUploading}
+              className="flex min-h-36 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-8 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {galleryUploading ? (
                 <>
                   <Loader2
                     size={34}
-                    className="mb-3 animate-spin text-indigo-600"
+                    className="mb-3 animate-spin text-emerald-600"
                   />
 
-                  <span className="text-sm font-medium text-slate-700">
+                  <span className="text-sm font-semibold text-slate-700">
                     Uploading images...
                   </span>
 
@@ -1183,12 +1073,9 @@ export default function DestinationForm({
                 </>
               ) : (
                 <>
-                  <ImagePlus
-                    size={36}
-                    className="mb-3 text-slate-500"
-                  />
+                  <ImagePlus size={36} className="mb-3 text-emerald-500" />
 
-                  <span className="text-sm font-medium text-slate-700">
+                  <span className="text-sm font-semibold text-slate-700">
                     Upload Gallery Images
                   </span>
 
@@ -1202,172 +1089,149 @@ export default function DestinationForm({
             {/* GALLERY ERROR */}
 
             {galleryError && (
-              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
-                <p className="text-sm text-red-700">
-                  {galleryError}
-                </p>
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3">
+                <p className="text-sm text-red-700">{galleryError}</p>
               </div>
             )}
 
-            {/* =================================================
-                GALLERY PREVIEW
-                ================================================= */}
+            {/* GALLERY PREVIEW */}
 
-            {formData.gallery.length >
-              0 && (
-              <div className="mt-5">
+            {formData.gallery.length > 0 && (
+              <div className="mt-6">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-700">
+                  <p className="text-sm font-semibold text-slate-700">
                     Uploaded Images
                   </p>
 
-                  <p className="text-xs text-slate-500">
-                    {
-                      formData.gallery
-                        .length
-                    }{" "}
-                    image
-                    {formData.gallery
-                      .length !== 1
-                      ? "s"
-                      : ""}
+                  <p className="text-xs font-medium text-slate-500">
+                    {formData.gallery.length} image
+                    {formData.gallery.length !== 1 ? "s" : ""}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                  {formData.gallery.map(
-                    (
-                      image,
-                      index,
-                    ) => (
-                      <div
-                        key={
-                          image.publicId ||
-                          image.url ||
-                          index
-                        }
-                        className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+                  {formData.gallery.map((image, index) => (
+                    <div
+                      key={image.publicId || image.url || index}
+                      className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"
+                    >
+                      <img
+                        src={image.url}
+                        alt={`Destination gallery ${index + 1}`}
+                        className="h-40 w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveGalleryImage(index)}
+                        disabled={loading || galleryUploading}
+                        className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Delete image"
                       >
-                        <img
-                          src={
-                            image.url
-                          }
-                          alt={`Destination gallery ${index + 1}`}
-                          className="h-40 w-full object-cover transition group-hover:scale-105"
-                        />
+                        <X size={18} />
+                      </button>
 
-                        {/* DELETE BUTTON */}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleRemoveGalleryImage(
-                              index,
-                            )
-                          }
-                          disabled={
-                            loading ||
-                            galleryUploading
-                          }
-                          className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          title="Delete image"
-                        >
-                          <X
-                            size={18}
-                          />
-                        </button>
-
-                        {/* IMAGE NUMBER */}
-
-                        <div className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-1 text-xs text-white">
-                          {index + 1}
-                        </div>
+                      <div className="absolute bottom-2 left-2 rounded-lg bg-slate-950/70 px-2 py-1 text-xs font-medium text-white">
+                        {index + 1}
                       </div>
-                    ),
-                  )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* =====================================================
           SETTINGS
           ===================================================== */}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-5 text-lg font-semibold text-slate-900">
-          Settings
-        </h2>
+      <section className={sectionClass}>
+        <div className="mb-6 flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <Settings size={20} />
+          </div>
 
-        <div className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Settings</h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Control visibility and featured status.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
           {/* FEATURED */}
 
-          <label className="flex cursor-pointer items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/40">
             <input
               type="checkbox"
               name="isFeatured"
-              checked={
-                formData.isFeatured
-              }
+              checked={formData.isFeatured}
               onChange={handleChange}
               disabled={loading}
-              className="h-4 w-4 rounded"
+              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
             />
 
-            <span className="text-sm text-slate-700">
-              Mark as featured destination
-            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">
+                Featured destination
+              </p>
+
+              <p className="text-xs text-slate-500">
+                Highlight this destination in featured sections.
+              </p>
+            </div>
           </label>
 
           {/* ACTIVE */}
 
-          <label className="flex cursor-pointer items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/40">
             <input
               type="checkbox"
               name="isActive"
-              checked={
-                formData.isActive
-              }
+              checked={formData.isActive}
               onChange={handleChange}
               disabled={loading}
-              className="h-4 w-4 rounded"
+              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
             />
 
-            <span className="text-sm text-slate-700">
-              Active destination
-            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">
+                Active destination
+              </p>
+
+              <p className="text-xs text-slate-500">
+                Allow this destination to remain active on the platform.
+              </p>
+            </div>
           </label>
         </div>
-      </div>
+      </section>
 
       {/* =====================================================
           ACTIONS
           ===================================================== */}
 
-      <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-6">
+      <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-end">
         <button
           type="button"
-          onClick={() =>
-            router.push(
-              "/admin/dashboard/destinations",
-            )
-          }
+          onClick={() => router.push("/admin/dashboard/destinations")}
           disabled={loading}
-          className="rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Cancel
         </button>
 
         <button
           type="submit"
-          disabled={
-            loading ||
-            galleryUploading
-          }
-          className="rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={loading || galleryUploading}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
+          {loading && <Loader2 size={18} className="animate-spin" />}
+
           {loading
             ? mode === "edit"
               ? "Updating..."

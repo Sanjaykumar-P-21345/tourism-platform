@@ -1,90 +1,61 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
 
 import connectDB from "@/utils/mongodb";
-import { Destination, Itinerary, Place } from "@/utils/schema";
 import { requireAdmin } from "@/utils/adminAuth";
+import { Itinerary } from "@/utils/schema";
+import cloudinary from "@/utils/cloudinary";
 
-function normalizeImage(image) {
-  if (!image) return null;
-
-  if (typeof image === "string") {
-    return {
-      url: image,
-      publicId: "",
-    };
-  }
-
-  if (typeof image === "object" && image.url) {
-    return {
-      url: image.url,
-      publicId: image.publicId || "",
-    };
-  }
-
-  return null;
+function isValidObjectId(id) {
+  return /^[a-f\d]{24}$/i.test(id);
 }
 
-function normalizeGallery(gallery) {
-  if (!Array.isArray(gallery)) return [];
+/* ================================================================
+   CLOUDINARY DELETE
+================================================================ */
 
-  return gallery.map(normalizeImage).filter(Boolean);
-}
-
-async function validateDays(days) {
-  if (!Array.isArray(days)) {
-    return {
-      valid: false,
-      message: "Days must be an array.",
-    };
+async function deleteCloudinaryImage(image) {
+  if (!image?.publicId) {
+    return;
   }
 
-  for (const day of days) {
-    if (!day.title?.trim()) {
-      return {
-        valid: false,
-        message: "Every day must have a title.",
-      };
-    }
+  try {
+    await cloudinary.uploader.destroy(image.publicId, {
+      resource_type: "image",
+      invalidate: true,
+    });
+  } catch (error) {
+    console.error(
+      `Failed to delete Cloudinary image ${image.publicId}:`,
+      error,
+    );
+  }
+}
 
-    if (!Array.isArray(day.activities)) {
-      continue;
-    }
+/* ================================================================
+   DELETE ALL ITINERARY IMAGES
+================================================================ */
 
-    for (const activity of day.activities) {
-      if (!activity.title?.trim()) {
-        return {
-          valid: false,
-          message: "Every activity must have a title.",
-        };
-      }
+async function deleteItineraryImages(itinerary) {
+  const images = [];
 
-      if (activity.place) {
-        if (!mongoose.Types.ObjectId.isValid(activity.place)) {
-          return {
-            valid: false,
-            message: `Invalid place ID: ${activity.place}`,
-          };
-        }
+  if (itinerary?.coverImage?.publicId) {
+    images.push(itinerary.coverImage);
+  }
 
-        const placeExists = await Place.exists({
-          _id: activity.place,
-        });
-
-        if (!placeExists) {
-          return {
-            valid: false,
-            message: `Place not found: ${activity.place}`,
-          };
-        }
+  if (Array.isArray(itinerary?.gallery)) {
+    for (const image of itinerary.gallery) {
+      if (image?.publicId) {
+        images.push(image);
       }
     }
   }
 
-  return {
-    valid: true,
-  };
+  await Promise.all(images.map((image) => deleteCloudinaryImage(image)));
 }
+
+/* ================================================================
+   GET ONE ITINERARY
+================================================================ */
 
 export async function GET(request, { params }) {
   try {
@@ -94,7 +65,7 @@ export async function GET(request, { params }) {
       return NextResponse.json(
         {
           success: false,
-          message: "Unauthorized",
+          message: "Unauthorized.",
         },
         { status: 401 },
       );
@@ -102,7 +73,7 @@ export async function GET(request, { params }) {
 
     const { id } = await params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json(
         {
           success: false,
@@ -146,6 +117,11 @@ export async function GET(request, { params }) {
   }
 }
 
+/* ================================================================
+   PUT
+   Used for EDIT + ACTIVATE/DEACTIVATE
+================================================================ */
+
 export async function PUT(request, { params }) {
   try {
     const admin = await requireAdmin(request);
@@ -154,7 +130,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json(
         {
           success: false,
-          message: "Unauthorized",
+          message: "Unauthorized.",
         },
         { status: 401 },
       );
@@ -162,7 +138,7 @@ export async function PUT(request, { params }) {
 
     const { id } = await params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json(
         {
           success: false,
@@ -176,186 +152,7 @@ export async function PUT(request, { params }) {
 
     const body = await request.json();
 
-    const allowedFields = [
-      "destination",
-      "title",
-      "slug",
-      "duration",
-      "description",
-      "days",
-      "estimatedBudget",
-      "coverImage",
-      "gallery",
-      "isFeatured",
-      "isActive",
-    ];
-
-    const updateData = {};
-
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field];
-      }
-    }
-
-    if (updateData.destination !== undefined) {
-      if (!mongoose.Types.ObjectId.isValid(updateData.destination)) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Invalid destination ID.",
-          },
-          { status: 400 },
-        );
-      }
-
-      const destinationExists = await Destination.exists({
-        _id: updateData.destination,
-      });
-
-      if (!destinationExists) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Destination not found.",
-          },
-          { status: 404 },
-        );
-      }
-    }
-
-    if (updateData.title !== undefined) {
-      if (!updateData.title?.trim()) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Title cannot be empty.",
-          },
-          { status: 400 },
-        );
-      }
-
-      updateData.title = updateData.title.trim();
-    }
-
-    if (updateData.slug !== undefined) {
-      if (!updateData.slug?.trim()) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Slug cannot be empty.",
-          },
-          { status: 400 },
-        );
-      }
-
-      updateData.slug = updateData.slug.trim().toLowerCase();
-
-      const duplicate = await Itinerary.findOne({
-        slug: updateData.slug,
-        _id: { $ne: id },
-      });
-
-      if (duplicate) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Itinerary slug already exists.",
-          },
-          { status: 409 },
-        );
-      }
-    }
-
-    if (updateData.duration) {
-      const days = Number(updateData.duration.days);
-
-      const nights = Number(updateData.duration.nights);
-
-      if (!Number.isInteger(days) || days < 1) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Duration days must be at least 1.",
-          },
-          { status: 400 },
-        );
-      }
-
-      if (!Number.isInteger(nights) || nights < 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Duration nights must be 0 or greater.",
-          },
-          { status: 400 },
-        );
-      }
-
-      updateData.duration = {
-        days,
-        nights,
-      };
-    }
-
-    if (updateData.description !== undefined) {
-      updateData.description = updateData.description?.trim() || "";
-    }
-
-    if (updateData.days !== undefined) {
-      const daysValidation = await validateDays(updateData.days);
-
-      if (!daysValidation.valid) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: daysValidation.message,
-          },
-          { status: 400 },
-        );
-      }
-
-      updateData.days = updateData.days.map((day, dayIndex) => ({
-        dayNumber: Number(day.dayNumber) || dayIndex + 1,
-
-        title: day.title.trim(),
-
-        activities: Array.isArray(day.activities)
-          ? day.activities.map((activity) => {
-              const item = {
-                title: activity.title.trim(),
-              };
-
-              if (activity.time?.trim()) {
-                item.time = activity.time.trim();
-              }
-
-              if (activity.description?.trim()) {
-                item.description = activity.description.trim();
-              }
-
-              if (activity.place) {
-                item.place = activity.place;
-              }
-
-              return item;
-            })
-          : [],
-      }));
-    }
-
-    if (updateData.coverImage !== undefined) {
-      updateData.coverImage = normalizeImage(updateData.coverImage);
-    }
-
-    if (updateData.gallery !== undefined) {
-      updateData.gallery = normalizeGallery(updateData.gallery);
-    }
-
-    const itinerary = await Itinerary.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const itinerary = await Itinerary.findById(id);
 
     if (!itinerary) {
       return NextResponse.json(
@@ -367,23 +164,121 @@ export async function PUT(request, { params }) {
       );
     }
 
+    /*
+     * IMPORTANT:
+     * If this is only a status update, do not replace
+     * the rest of the itinerary.
+     */
+
+    if (
+      Object.prototype.hasOwnProperty.call(body, "isActive") &&
+      Object.keys(body).length === 1
+    ) {
+      itinerary.isActive = Boolean(body.isActive);
+
+      await itinerary.save();
+
+      const updated = await Itinerary.findById(id)
+        .populate("destination", "name slug")
+        .populate("days.activities.place", "name slug category")
+        .lean();
+
+      return NextResponse.json({
+        success: true,
+        message: itinerary.isActive
+          ? "Itinerary activated successfully."
+          : "Itinerary deactivated successfully.",
+        data: updated,
+      });
+    }
+
+    /* ============================================================
+       NORMAL EDIT
+    ============================================================ */
+
+    if (body.destination !== undefined) {
+      itinerary.destination = body.destination;
+    }
+
+    if (body.title !== undefined) {
+      itinerary.title = body.title;
+    }
+
+    if (body.slug !== undefined) {
+      itinerary.slug = body.slug;
+    }
+
+    if (body.description !== undefined) {
+      itinerary.description = body.description;
+    }
+
+    if (body.duration !== undefined) {
+      itinerary.duration = body.duration;
+    }
+
+    if (body.days !== undefined) {
+      itinerary.days = body.days;
+    }
+
+    if (body.estimatedBudget !== undefined) {
+      itinerary.estimatedBudget = body.estimatedBudget;
+    }
+
+    if (body.coverImage !== undefined) {
+      itinerary.coverImage = body.coverImage;
+    }
+
+    if (body.gallery !== undefined) {
+      itinerary.gallery = body.gallery;
+    }
+
+    if (body.isFeatured !== undefined) {
+      itinerary.isFeatured = Boolean(body.isFeatured);
+    }
+
+    if (body.isActive !== undefined) {
+      itinerary.isActive = Boolean(body.isActive);
+    }
+
+    await itinerary.save();
+
+    const updated = await Itinerary.findById(id)
+      .populate("destination", "name slug")
+      .populate("days.activities.place", "name slug category")
+      .lean();
+
     return NextResponse.json({
       success: true,
       message: "Itinerary updated successfully.",
-      data: itinerary,
+      data: updated,
     });
   } catch (error) {
     console.error("PUT itinerary error:", error);
 
+    if (error?.code === 11000) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "An itinerary with this slug already exists.",
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to update itinerary.",
+        message: error?.message || "Failed to update itinerary.",
       },
       { status: 500 },
     );
   }
 }
+
+/* ================================================================
+   DELETE
+   PERMANENT DATABASE + CLOUDINARY DELETE
+================================================================ */
 
 export async function DELETE(request, { params }) {
   try {
@@ -393,7 +288,7 @@ export async function DELETE(request, { params }) {
       return NextResponse.json(
         {
           success: false,
-          message: "Unauthorized",
+          message: "Unauthorized.",
         },
         { status: 401 },
       );
@@ -401,7 +296,7 @@ export async function DELETE(request, { params }) {
 
     const { id } = await params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return NextResponse.json(
         {
           success: false,
@@ -413,16 +308,12 @@ export async function DELETE(request, { params }) {
 
     await connectDB();
 
-    const itinerary = await Itinerary.findByIdAndUpdate(
-      id,
-      {
-        isActive: false,
-      },
-      {
-        new: true,
-        runValidators: true,
-      },
-    );
+    /* ============================================================
+       FIND FIRST
+       We need the Cloudinary publicIds before deleting MongoDB.
+    ============================================================ */
+
+    const itinerary = await Itinerary.findById(id).lean();
 
     if (!itinerary) {
       return NextResponse.json(
@@ -434,10 +325,22 @@ export async function DELETE(request, { params }) {
       );
     }
 
+    /* ============================================================
+       DELETE CLOUDINARY IMAGES
+    ============================================================ */
+
+    await deleteItineraryImages(itinerary);
+
+    /* ============================================================
+       DELETE MONGODB DOCUMENT
+    ============================================================ */
+
+    await Itinerary.findByIdAndDelete(id);
+
     return NextResponse.json({
       success: true,
-      message: "Itinerary deactivated successfully.",
-      data: itinerary,
+      message:
+        "Itinerary permanently deleted from the database and Cloudinary.",
     });
   } catch (error) {
     console.error("DELETE itinerary error:", error);
@@ -445,7 +348,7 @@ export async function DELETE(request, { params }) {
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to deactivate itinerary.",
+        message: error?.message || "Failed to permanently delete itinerary.",
       },
       { status: 500 },
     );

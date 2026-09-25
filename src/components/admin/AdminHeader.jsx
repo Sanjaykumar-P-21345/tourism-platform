@@ -1,141 +1,133 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Menu, LogOut, UserCircle, Loader2 } from "lucide-react";
+import { Menu, Search, Bell, LogOut } from "lucide-react";
 
-import { getUser, clearAuthData } from "@/utils/api";
+import { getUser, logout } from "@/utils/api";
 
 export default function AdminHeader({ onMenuClick }) {
-  const router = useRouter();
-
-  // IMPORTANT:
-  // Keep the initial value static so server and client render
-  // exactly the same HTML during hydration.
-  const [admin, setAdmin] = useState({
-    name: "Administrator",
-    email: "",
-    role: "Admin",
-  });
-
-  const [loggingOut, setLoggingOut] = useState(false);
+  /*
+   * Keep the initial render identical on server and client.
+   * User information is loaded only after hydration.
+   */
+  const [userName, setUserName] = useState("Administrator");
+  const [userRole, setUserRole] = useState("Admin");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+
     const storedUser = getUser();
 
-    if (!storedUser) {
-      return;
-    }
-
-    setAdmin({
-      name:
+    if (storedUser) {
+      const name =
         storedUser.name ||
         storedUser.fullName ||
         storedUser.username ||
         storedUser.email ||
-        "Administrator",
+        "Administrator";
 
-      email: storedUser.email || "",
+      const role =
+        storedUser.role === "admin" ? "Admin" : storedUser.role || "Admin";
 
-      role: storedUser.role === "admin" ? "Admin" : storedUser.role || "Admin",
-    });
+      setUserName(name);
+      setUserRole(role);
+    }
   }, []);
 
-  const handleLogout = () => {
-    if (loggingOut) {
-      return;
-    }
-
-    setLoggingOut(true);
-
-    /*
-     * Your authentication uses:
-     *
-     * sessionStorage.token
-     * sessionStorage.user
-     *
-     * Therefore clearAuthData() is enough.
-     *
-     * We intentionally DO NOT call:
-     * /api/admin/logout
-     *
-     * because that endpoint is not required for your
-     * current Bearer-token/sessionStorage authentication.
-     */
-
-    clearAuthData();
-
-    // Go directly to login.
-    router.replace("/admin/login");
-  };
-
-  const adminName = admin.name || "Administrator";
-  const adminEmail = admin.email || "Admin";
-
-  const initial = adminName.charAt(0).toUpperCase() || "A";
+  const avatarLetter = mounted ? userName.charAt(0).toUpperCase() : "A";
 
   return (
-    <header className="sticky top-0 z-30 h-16 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-      <div className="flex h-full items-center justify-between px-4 sm:px-6">
-        {/* LEFT SIDE */}
+    <header className="relative z-30 m-0 h-16 w-full border-b border-slate-200 bg-white p-0 shadow-sm">
+      <div className="flex h-16 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
+        {/* =====================================================
+            LEFT SIDE
+        ====================================================== */}
+
         <div className="flex min-w-0 items-center gap-3">
           {/* Mobile menu */}
           <button
             type="button"
             onClick={onMenuClick}
-            aria-label="Open sidebar"
-            className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 lg:hidden"
+            aria-label="Open navigation"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 lg:hidden"
           >
-            <Menu size={22} />
+            <Menu className="h-5 w-5" />
           </button>
 
-          <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold text-slate-900 dark:text-white sm:text-lg">
-              Tourism Management
-            </h1>
+          {/* Search */}
+          {/* <div className="hidden md:flex">
+            <button
+              type="button"
+              className="flex h-10 w-[390px] max-w-[42vw] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition-all duration-200 hover:border-emerald-200 hover:bg-white hover:shadow-sm"
+            >
+              <Search className="h-4 w-4 shrink-0 text-slate-400" />
 
-            <p className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
-              Admin Dashboard
-            </p>
-          </div>
+              <span className="flex-1 truncate text-sm text-slate-400">
+                Search dashboard...
+              </span>
+
+              <span className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-400">
+                Ctrl + K
+              </span>
+            </button>
+          </div> */}
         </div>
 
-        {/* RIGHT SIDE */}
-        <div className="flex items-center gap-2 sm:gap-4">
-          {/* Admin information */}
-          <div className="hidden text-right sm:block">
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-              {adminName}
-            </p>
+        {/* =====================================================
+            RIGHT SIDE
+        ====================================================== */}
 
-            <p className="max-w-[180px] truncate text-xs text-slate-500 dark:text-slate-400">
-              {adminEmail}
-            </p>
-          </div>
-
-          {/* Avatar */}
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-sm font-semibold text-white">
-            {initial || <UserCircle size={20} />}
-          </div>
-
-          {/* Logout */}
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {/* Mobile search */}
           <button
             type="button"
-            onClick={handleLogout}
-            disabled={loggingOut}
-            title="Logout"
-            className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:border-red-900 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+            aria-label="Search"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 md:hidden"
           >
-            {loggingOut ? (
-              <Loader2 size={17} className="animate-spin" />
-            ) : (
-              <LogOut size={17} />
-            )}
-
-            <span className="hidden md:inline">
-              {loggingOut ? "Logging out..." : "Logout"}
-            </span>
+            <Search className="h-4 w-4" />
           </button>
+
+          {/* Notifications */}
+          {/* <button
+            type="button"
+            aria-label="Notifications"
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            <Bell className="h-[18px] w-[18px]" />
+
+            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-bold text-white shadow-sm">
+              3
+            </span>
+          </button> */}
+
+          {/* Divider */}
+          <div className="mx-1 hidden h-8 w-px bg-slate-200 sm:block" />
+
+          {/* Admin */}
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-sm font-bold text-emerald-700 shadow-sm">
+              {avatarLetter}
+            </div>
+
+            <div className="hidden min-w-0 sm:block">
+              <p className="max-w-[150px] truncate text-sm font-semibold text-slate-800">
+                {userName}
+              </p>
+
+              <p className="text-[11px] text-slate-400">{userRole}</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={logout}
+              aria-label="Logout"
+              title="Logout"
+              className="ml-1 flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
+            >
+              <LogOut className="h-[17px] w-[17px]" />
+            </button>
+          </div>
         </div>
       </div>
     </header>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   X,
-  Loader2,
+  LoaderCircle,
   MapPin,
   CalendarDays,
   IndianRupee,
@@ -17,9 +17,11 @@ import PackageForm from "@/components/admin/PackageForm";
 import { adminApi } from "@/utils/adminApi";
 
 export default function PackageDetailsPage() {
-  const { id } = useParams();
+  const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const id = params?.id;
 
   const isViewMode = searchParams.get("view") === "true";
 
@@ -29,24 +31,75 @@ export default function PackageDetailsPage() {
 
   const [error, setError] = useState("");
 
+  /* =========================================================
+     LOCK BACKGROUND SCROLL
+     ========================================================= */
+
   useEffect(() => {
-    if (!id) return;
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  /* =========================================================
+     ESCAPE KEY
+     ========================================================= */
+
+  useEffect(() => {
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        closeModal();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  /* =========================================================
+     LOAD PACKAGE
+     ========================================================= */
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
 
     let cancelled = false;
 
     async function loadPackage() {
-      setLoading(true);
-      setError("");
-
       try {
+        setLoading(true);
+        setError("");
+
         const response = await adminApi.get(`/api/dashboard/packages/${id}`);
 
+        const data =
+          response?.data?.package || response?.data || response?.package;
+
+        if (!data) {
+          throw new Error("Package not found.");
+        }
+
         if (!cancelled) {
-          setPackageData(response.data);
+          setPackageData(data);
         }
       } catch (loadError) {
+        console.error("Failed to load package:", loadError);
+
         if (!cancelled) {
-          setError(loadError?.message || "Failed to load package.");
+          setError(
+            loadError?.data?.message ||
+              loadError?.message ||
+              "Failed to load package.",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -62,32 +115,101 @@ export default function PackageDetailsPage() {
     };
   }, [id]);
 
+  /* =========================================================
+     CLOSE MODAL
+     ========================================================= */
+
   function closeModal() {
     router.push("/admin/dashboard/packages");
   }
 
+  /* =========================================================
+     SAVE PACKAGE
+     ========================================================= */
+
+  function handleSaved(updatedPackage) {
+    if (updatedPackage) {
+      setPackageData(updatedPackage);
+    }
+
+    closeModal();
+  }
+
+  /* =========================================================
+     BACKDROP CLICK
+     ========================================================= */
+
+  function handleBackdropMouseDown(event) {
+    if (event.target === event.currentTarget) {
+      closeModal();
+    }
+  }
+
+  /* =========================================================
+     MAIN MODAL
+     ========================================================= */
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[9999] overflow-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-label={isViewMode ? "View package" : "Edit package"}
+    >
+      {/* =====================================================
+          FULL SCREEN BACKDROP
+          ===================================================== */}
+
       <div
-        className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm"
-        onClick={closeModal}
+        className="absolute inset-0 bg-slate-950/75 backdrop-blur-md"
+        onMouseDown={closeModal}
       />
 
-      <div className="relative flex min-h-full items-start justify-center p-3 sm:p-6 lg:p-10">
+      {/* =====================================================
+          MODAL CENTER WRAPPER
+          ===================================================== */}
+
+      <div
+        className="relative z-10 flex h-full w-full items-center justify-center p-3 sm:p-5 lg:p-8"
+        onMouseDown={handleBackdropMouseDown}
+      >
+        {/* ===================================================
+            PROFESSIONAL COMPACT MODAL
+            =================================================== */}
+
         <div
-          className="relative z-10 my-2 w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:my-6"
-          onClick={(event) => event.stopPropagation()}
+          className="
+            flex
+            w-full
+            max-w-4xl
+            flex-col
+            overflow-hidden
+            rounded-2xl
+            border
+            border-emerald-100
+            bg-white
+            shadow-[0_25px_80px_rgba(15,23,42,0.35)]
+          "
+          style={{
+            maxHeight: "calc(100vh - 48px)",
+          }}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
         >
-          {/* Modal Header */}
-          <div className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:px-6">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                Package
+          {/* =================================================
+              MODAL HEADER
+              ================================================= */}
+
+          <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-emerald-100 bg-white px-4 sm:px-5">
+            <div className="min-w-0 pr-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-600">
+                Package Management
               </p>
 
-              <h1 className="truncate text-lg font-bold text-slate-900 dark:text-white sm:text-xl">
+              <h1 className="mt-0.5 truncate text-base font-bold text-slate-900 sm:text-lg">
                 {loading
-                  ? "Loading..."
+                  ? "Loading Package..."
                   : isViewMode
                     ? packageData?.name || "Package Details"
                     : `Edit ${packageData?.name || "Package"}`}
@@ -97,50 +219,58 @@ export default function PackageDetailsPage() {
             <button
               type="button"
               onClick={closeModal}
-              className="ml-4 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              className="
+                flex
+                h-9
+                w-9
+                shrink-0
+                items-center
+                justify-center
+                rounded-lg
+                border
+                border-slate-200
+                bg-white
+                text-slate-500
+                transition
+                hover:border-emerald-200
+                hover:bg-emerald-50
+                hover:text-emerald-700
+                focus:outline-none
+                focus:ring-2
+                focus:ring-emerald-500
+                focus:ring-offset-2
+              "
               title="Close"
+              aria-label="Close"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
 
-          {/* Content */}
-          <div className="max-h-[calc(100vh-100px)] overflow-y-auto p-4 sm:p-6 lg:p-8">
+          {/* =================================================
+              SCROLLABLE CONTENT
+              ================================================= */}
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {loading ? (
-              <div className="flex min-h-[400px] items-center justify-center">
-                <div className="text-center">
-                  <Loader2
-                    size={34}
-                    className="mx-auto animate-spin text-indigo-600"
-                  />
-
-                  <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                    Loading package...
-                  </p>
-                </div>
-              </div>
+              <LoadingState />
             ) : error ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-900/50 dark:bg-red-950/30">
-                <p className="font-medium text-red-700 dark:text-red-300">
-                  {error}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-slate-900"
-                >
-                  Close
-                </button>
-              </div>
+              <ErrorState error={error} onClose={closeModal} />
             ) : isViewMode ? (
-              <PackageView packageData={packageData} onClose={closeModal} />
+              <div className="p-4 sm:p-5 lg:p-6">
+                <PackageView packageData={packageData} onClose={closeModal} />
+              </div>
             ) : (
-              <PackageForm
-                mode="edit"
-                packageId={id}
-                initialData={packageData}
-              />
+              <div className="p-4 sm:p-5 lg:p-6">
+                <PackageForm
+                  mode="edit"
+                  packageId={id}
+                  initialData={packageData}
+                  readOnly={false}
+                  onSuccess={handleSaved}
+                  onCancel={closeModal}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -149,190 +279,48 @@ export default function PackageDetailsPage() {
   );
 }
 
-function PackageView({ packageData, onClose }) {
+/* =============================================================
+   LOADING STATE
+   ============================================================= */
+
+function LoadingState() {
   return (
-    <div className="space-y-6">
-      {/* Hero */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-        {packageData?.coverImage?.url ? (
-          <div className="relative">
-            <img
-              src={packageData.coverImage.url}
-              alt={packageData.name}
-              className="h-64 w-full object-cover sm:h-80"
-            />
+    <div className="flex min-h-[420px] items-center justify-center">
+      <div className="text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50">
+          <LoaderCircle size={26} className="animate-spin text-emerald-600" />
+        </div>
 
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-5 sm:p-7">
-              <div className="flex flex-wrap items-center gap-2">
-                {packageData.isFeatured && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-amber-950">
-                    <Star size={13} />
-                    Featured
-                  </span>
-                )}
-
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-                    packageData.isActive
-                      ? "bg-emerald-500 text-white"
-                      : "bg-slate-600 text-white"
-                  }`}
-                >
-                  {packageData.isActive ? (
-                    <CheckCircle2 size={13} />
-                  ) : (
-                    <CircleOff size={13} />
-                  )}
-
-                  {packageData.isActive ? "Active" : "Inactive"}
-                </span>
-              </div>
-
-              <h2 className="mt-3 text-2xl font-bold text-white sm:text-3xl">
-                {packageData.name}
-              </h2>
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-64 items-center justify-center bg-slate-100 dark:bg-slate-900">
-            <p className="text-slate-500">No cover image</p>
-          </div>
-        )}
-      </div>
-
-      {/* Summary */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <InfoCard
-          icon={<MapPin size={19} />}
-          label="Destination"
-          value={packageData.destination?.name || "-"}
-        />
-
-        <InfoCard
-          icon={<CalendarDays size={19} />}
-          label="Duration"
-          value={`${packageData.duration?.days ?? 0} Days / ${
-            packageData.duration?.nights ?? 0
-          } Nights`}
-        />
-
-        <InfoCard
-          icon={<IndianRupee size={19} />}
-          label="Price"
-          value={`${packageData.price ?? 0} · ${formatPriceType(
-            packageData.priceType,
-          )}`}
-        />
-
-        <InfoCard
-          icon={<Star size={19} />}
-          label="Featured"
-          value={packageData.isFeatured ? "Yes" : "No"}
-        />
-      </div>
-
-      {/* Description */}
-      <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-800 sm:p-6">
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-          Description
-        </h3>
-
-        {packageData.shortDescription && (
-          <p className="mt-3 font-medium text-slate-700 dark:text-slate-300">
-            {packageData.shortDescription}
-          </p>
-        )}
-
-        <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-600 dark:text-slate-400">
-          {packageData.description || "-"}
+        <p className="mt-4 text-sm font-semibold text-slate-700">
+          Loading package...
         </p>
-      </section>
 
-      {/* Inclusions */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ListSection title="Inclusions" items={packageData.inclusions} />
-
-        <ListSection title="Exclusions" items={packageData.exclusions} />
+        <p className="mt-1 text-xs text-slate-400">Please wait</p>
       </div>
+    </div>
+  );
+}
 
-      {/* Itinerary */}
-      <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-800 sm:p-6">
-        <h3 className="mb-5 text-lg font-bold text-slate-900 dark:text-white">
-          Itinerary
-        </h3>
+/* =============================================================
+   ERROR STATE
+   ============================================================= */
 
-        {packageData.itinerary?.length ? (
-          <div className="space-y-4">
-            {packageData.itinerary.map((day) => (
-              <div
-                key={day.day}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900"
-              >
-                <div className="flex gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
-                    {day.day}
-                  </div>
+function ErrorState({ error, onClose }) {
+  return (
+    <div className="flex min-h-[420px] items-center justify-center p-6">
+      <div className="w-full max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-600">
+          <X size={22} />
+        </div>
 
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-slate-900 dark:text-white">
-                      {day.title}
-                    </h4>
+        <h2 className="mt-4 font-bold text-red-700">Unable to load package</h2>
 
-                    {day.description && (
-                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-400">
-                        {day.description}
-                      </p>
-                    )}
+        <p className="mt-2 text-sm leading-6 text-red-600">{error}</p>
 
-                    {day.places?.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {day.places.map((place) => (
-                          <span
-                            key={place._id}
-                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                          >
-                            {place.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            No itinerary added.
-          </p>
-        )}
-      </section>
-
-      {/* Gallery */}
-      {packageData.gallery?.length > 0 && (
-        <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-800 sm:p-6">
-          <h3 className="mb-5 text-lg font-bold text-slate-900 dark:text-white">
-            Gallery
-          </h3>
-
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {packageData.gallery.map((image, index) => (
-              <img
-                key={`${image.url}-${index}`}
-                src={image.url}
-                alt={`${packageData.name} gallery ${index + 1}`}
-                className="h-40 w-full rounded-xl object-cover"
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      <div className="flex justify-end border-t border-slate-200 pt-5 dark:border-slate-800">
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+          className="mt-5 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
         >
           Close
         </button>
@@ -341,49 +329,389 @@ function PackageView({ packageData, onClose }) {
   );
 }
 
-function InfoCard({ icon, label, value }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-        {icon}
+/* =============================================================
+   PACKAGE VIEW
+   ============================================================= */
 
-        <span className="text-xs font-semibold uppercase tracking-wide">
-          {label}
-        </span>
+function PackageView({ packageData, onClose }) {
+  return (
+    <div className="space-y-5">
+      {/* =======================================================
+          HERO
+          ======================================================= */}
+
+      <div className="overflow-hidden rounded-xl border border-emerald-100">
+        {packageData?.coverImage?.url ? (
+          <div className="relative">
+            <img
+              src={packageData.coverImage.url}
+              alt={packageData.name || "Package"}
+              className="
+                h-48
+                w-full
+                object-cover
+                sm:h-56
+                lg:h-64
+              "
+            />
+
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-4 sm:p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                {packageData.isFeatured ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-amber-950">
+                    <Star size={12} />
+                    Featured
+                  </span>
+                ) : null}
+
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    packageData.isActive !== false
+                      ? "bg-emerald-500 text-white"
+                      : "bg-slate-700 text-white"
+                  }`}
+                >
+                  {packageData.isActive !== false ? (
+                    <CheckCircle2 size={12} />
+                  ) : (
+                    <CircleOff size={12} />
+                  )}
+
+                  {packageData.isActive !== false ? "Active" : "Inactive"}
+                </span>
+              </div>
+
+              <h2 className="mt-2 text-xl font-bold text-white sm:text-2xl">
+                {packageData.name || "Untitled Package"}
+              </h2>
+
+              {packageData.shortDescription ? (
+                <p className="mt-1 max-w-2xl text-xs leading-5 text-white/80 sm:text-sm">
+                  {packageData.shortDescription}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-48 items-center justify-center bg-emerald-50 sm:h-56">
+            <div className="text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm">
+                <Star size={22} />
+              </div>
+
+              <p className="mt-2 text-xs text-slate-500">No cover image</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      <p className="mt-2 font-bold text-slate-900 dark:text-white">{value}</p>
+      {/* =======================================================
+          SUMMARY CARDS
+          ======================================================= */}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <InfoCard
+          icon={<MapPin size={17} />}
+          label="Destination"
+          value={packageData?.destination?.name || "-"}
+        />
+
+        <InfoCard
+          icon={<CalendarDays size={17} />}
+          label="Duration"
+          value={`${packageData?.duration?.days ?? 0} Days / ${
+            packageData?.duration?.nights ?? 0
+          } Nights`}
+        />
+
+        <InfoCard
+          icon={<IndianRupee size={17} />}
+          label="Price"
+          value={`₹${Number(packageData?.price || 0).toLocaleString("en-IN")}`}
+          secondary={formatPriceType(packageData?.priceType)}
+        />
+
+        <InfoCard
+          icon={<Star size={17} />}
+          label="Featured"
+          value={packageData?.isFeatured ? "Yes" : "No"}
+        />
+      </div>
+
+      {/* =======================================================
+          PACKAGE DETAILS
+          ======================================================= */}
+
+      <section className="rounded-xl border border-emerald-100 bg-white p-4 sm:p-5">
+        <h3 className="text-base font-bold text-slate-900">Package Details</h3>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <DetailItem label="Package Name" value={packageData?.name} />
+
+          <DetailItem label="Slug" value={packageData?.slug} />
+
+          <DetailItem
+            label="Destination"
+            value={packageData?.destination?.name}
+          />
+
+          <DetailItem
+            label="Price"
+            value={`₹${Number(packageData?.price || 0).toLocaleString(
+              "en-IN",
+            )}`}
+          />
+
+          <DetailItem
+            label="Price Type"
+            value={formatPriceType(packageData?.priceType)}
+          />
+
+          <DetailItem
+            label="Duration"
+            value={`${packageData?.duration?.days ?? 0} Days / ${
+              packageData?.duration?.nights ?? 0
+            } Nights`}
+          />
+        </div>
+      </section>
+
+      {/* =======================================================
+          DESCRIPTION
+          ======================================================= */}
+
+      <section className="rounded-xl border border-emerald-100 bg-white p-4 sm:p-5">
+        <h3 className="text-base font-bold text-slate-900">Description</h3>
+
+        {packageData?.shortDescription ? (
+          <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
+            {packageData.shortDescription}
+          </p>
+        ) : null}
+
+        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">
+          {packageData?.description || "-"}
+        </p>
+      </section>
+
+      {/* =======================================================
+          INCLUSIONS / EXCLUSIONS
+          ======================================================= */}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ListSection title="Inclusions" items={packageData?.inclusions} />
+
+        <ListSection title="Exclusions" items={packageData?.exclusions} />
+      </div>
+
+      {/* =======================================================
+          ITINERARY
+          ======================================================= */}
+
+      <section className="rounded-xl border border-emerald-100 bg-white p-4 sm:p-5">
+        <div className="mb-4">
+          <h3 className="text-base font-bold text-slate-900">Itinerary</h3>
+
+          <p className="mt-1 text-xs text-slate-500">
+            Daily activities and selected places.
+          </p>
+        </div>
+
+        {Array.isArray(packageData?.itinerary) &&
+        packageData.itinerary.length > 0 ? (
+          <div className="space-y-3">
+            {packageData.itinerary.map((day, index) => (
+              <div
+                key={`day-${day.day}-${index}`}
+                className="rounded-xl border border-slate-200 bg-slate-50/70 p-4"
+              >
+                <div className="flex gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
+                    {day.day || index + 1}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold text-slate-900">
+                      {day.title || `Day ${index + 1}`}
+                    </h4>
+
+                    {day.description ? (
+                      <p className="mt-1.5 whitespace-pre-line text-xs leading-5 text-slate-600">
+                        {day.description}
+                      </p>
+                    ) : null}
+
+                    {Array.isArray(day.places) && day.places.length > 0 ? (
+                      <div className="mt-3">
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                          Places
+                        </p>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {day.places.map((place, placeIndex) => (
+                            <span
+                              key={place?._id || place || placeIndex}
+                              className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700"
+                            >
+                              {typeof place === "object"
+                                ? place.name || place.slug || "Place"
+                                : place}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-300 p-5 text-center">
+            <p className="text-xs text-slate-500">No itinerary added.</p>
+          </div>
+        )}
+      </section>
+
+      {/* =======================================================
+          GALLERY
+          ======================================================= */}
+
+      <section className="rounded-xl border border-emerald-100 bg-white p-4 sm:p-5">
+        <div className="mb-4">
+          <h3 className="text-base font-bold text-slate-900">Gallery</h3>
+
+          <p className="mt-1 text-xs text-slate-500">Package gallery images.</p>
+        </div>
+
+        {Array.isArray(packageData?.gallery) &&
+        packageData.gallery.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {packageData.gallery.map((image, index) => (
+              <div
+                key={`gallery-${image?.publicId || image?.url || index}`}
+                className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+              >
+                {image?.url ? (
+                  <img
+                    src={image.url}
+                    alt={`${packageData.name || "Package"} gallery ${
+                      index + 1
+                    }`}
+                    className="h-32 w-full object-cover transition duration-300 hover:scale-105 sm:h-36"
+                  />
+                ) : (
+                  <div className="flex h-32 items-center justify-center">
+                    <span className="text-[11px] text-slate-400">
+                      Image unavailable
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-300 p-5 text-center">
+            <p className="text-xs text-slate-500">No gallery images.</p>
+          </div>
+        )}
+      </section>
+
+      {/* =======================================================
+          FOOTER
+          ======================================================= */}
+
+      <div className="flex justify-end border-t border-slate-200 pt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg bg-slate-900 px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 sm:text-sm"
+        >
+          Close
+        </button>
+      </div>
     </div>
   );
 }
 
-function ListSection({ title, items = [] }) {
-  return (
-    <section className="rounded-2xl border border-slate-200 p-5 dark:border-slate-800 sm:p-6">
-      <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-        {title}
-      </h3>
+/* =============================================================
+   INFO CARD
+   ============================================================= */
 
-      {items.length > 0 ? (
-        <ul className="mt-4 space-y-2">
-          {items.map((item, index) => (
+function InfoCard({ icon, label, value, secondary }) {
+  return (
+    <div className="rounded-xl border border-emerald-100 bg-white p-3.5 shadow-sm">
+      <div className="flex items-center gap-2 text-emerald-600">
+        {icon}
+
+        <span className="text-[10px] font-bold uppercase tracking-wide">
+          {label}
+        </span>
+      </div>
+
+      <p className="mt-1.5 text-sm font-bold text-slate-900">{value}</p>
+
+      {secondary ? (
+        <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+          {secondary}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/* =============================================================
+   DETAIL ITEM
+   ============================================================= */
+
+function DetailItem({ label, value }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-1 break-words text-xs font-semibold text-slate-800 sm:text-sm">
+        {value || "-"}
+      </p>
+    </div>
+  );
+}
+
+/* =============================================================
+   LIST SECTION
+   ============================================================= */
+
+function ListSection({ title, items }) {
+  const normalizedItems = Array.isArray(items) ? items.filter(Boolean) : [];
+
+  return (
+    <section className="rounded-xl border border-emerald-100 bg-white p-4 sm:p-5">
+      <h3 className="text-base font-bold text-slate-900">{title}</h3>
+
+      {normalizedItems.length > 0 ? (
+        <ul className="mt-3 space-y-2.5">
+          {normalizedItems.map((item, index) => (
             <li
               key={`${item}-${index}`}
-              className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"
+              className="flex gap-2.5 text-xs leading-5 text-slate-600 sm:text-sm"
             >
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" />
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+
               <span>{item}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
-          None specified.
-        </p>
+        <p className="mt-3 text-xs text-slate-400">None specified.</p>
       )}
     </section>
   );
 }
+
+/* =============================================================
+   PRICE TYPE
+   ============================================================= */
 
 function formatPriceType(type) {
   if (type === "per-person") {

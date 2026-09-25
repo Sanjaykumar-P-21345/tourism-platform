@@ -1,28 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminHeader from "@/components/admin/AdminHeader";
 
 import { apiGet, clearAuthData, getToken } from "@/utils/api";
 
+const SIDEBAR_WIDTH = 242;
+
 export default function AdminDashboardLayout({ children }) {
   const router = useRouter();
-  const pathname = usePathname();
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  /* =====================================================
+     ADMIN AUTHENTICATION
+  ====================================================== */
 
   useEffect(() => {
     let isMounted = true;
 
     async function verifyAdmin() {
       try {
-        setCheckingAuth(true);
-
         const token = getToken();
 
         if (!token) {
@@ -31,6 +35,7 @@ export default function AdminDashboardLayout({ children }) {
         }
 
         const response = await apiGet("/api/admin/me");
+
         const admin = response?.user;
 
         if (!admin || admin.status !== "active") {
@@ -59,48 +64,133 @@ export default function AdminDashboardLayout({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [router, pathname]);
+  }, [router]);
+
+  /* =====================================================
+     AUTH LOADING
+  ====================================================== */
 
   if (checkingAuth) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        <div className="flex flex-col items-center gap-3">
-          <LoaderCircle
-            size={32}
-            className="animate-spin text-indigo-400"
-          />
+      <div className="flex min-h-screen w-full items-center justify-center bg-[#f5f8f6]">
+        <div className="flex flex-col items-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 shadow-sm">
+            <LoaderCircle size={30} className="animate-spin text-emerald-600" />
+          </div>
 
-          <p className="text-sm text-slate-400">
+          <p className="mt-4 text-sm font-semibold text-slate-700">
             Verifying administrator access...
           </p>
+
+          <p className="mt-1 text-xs text-slate-400">Please wait</p>
         </div>
       </div>
     );
   }
 
+  /* =====================================================
+     UNAUTHORIZED / REDIRECTING
+  ====================================================== */
+
   if (!authorized) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <LoaderCircle
-          size={28}
-          className="animate-spin text-indigo-400"
-        />
+      <div className="flex min-h-screen w-full items-center justify-center bg-[#f5f8f6]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50">
+          <LoaderCircle size={28} className="animate-spin text-emerald-600" />
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
-      {/* SIDEBAR */}
-      <AdminSidebar
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-      />
+  /* =====================================================
+     ADMIN DASHBOARD
+  ====================================================== */
 
-      {/* MAIN CONTENT */}
-      <main className="min-w-0 flex-1 p-4 sm:p-6">
-        {children}
-      </main>
+  return (
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#f5f8f6]">
+      {/* =================================================
+          SIDEBAR
+          
+          Fixed on desktop.
+          Drawer on mobile.
+      ================================================== */}
+
+      <AdminSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+
+      {/* =================================================
+          MAIN DESKTOP AREA
+
+          IMPORTANT:
+          Use margin-left instead of padding-left.
+
+          This guarantees that page content starts AFTER
+          the fixed sidebar and can never slide underneath it.
+      ================================================== */}
+
+      <div
+        className="
+          min-h-screen
+          w-full
+          min-w-0
+          bg-[#f5f8f6]
+          lg:ml-[242px]
+          lg:w-[calc(100%-242px)]
+        "
+      >
+        {/* =================================================
+            HEADER
+        ================================================== */}
+
+        <div className="sticky top-0 z-40 w-full">
+          <AdminHeader
+            onMenuClick={() => {
+              setSidebarOpen(true);
+            }}
+          />
+        </div>
+
+        {/* =================================================
+            PAGE CONTENT
+
+            No sidebar padding here.
+            No extra margin here.
+        ================================================== */}
+
+        <main
+          className="
+            min-h-[calc(100vh-64px)]
+            w-full
+            min-w-0
+            bg-[#f5f8f6]
+          "
+        >
+          {children}
+        </main>
+      </div>
+
+      {/* =================================================
+          MOBILE SIDEBAR BACKDROP
+
+          The AdminSidebar can also provide its own backdrop.
+          This layer is intentionally only useful when the
+          sidebar is opened on mobile.
+      ================================================== */}
+
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+          className="
+            fixed
+            inset-0
+            z-40
+            bg-slate-950/40
+            backdrop-blur-[1px]
+            lg:hidden
+          "
+        />
+      )}
     </div>
   );
 }

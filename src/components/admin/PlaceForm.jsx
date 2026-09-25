@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Loader2, ImagePlus, X } from "lucide-react";
+import { Loader2, ImagePlus, X, Wand2 } from "lucide-react";
 
 import ImageUpload from "@/components/admin/ImageUpload";
 import AdminButton from "@/components/admin/AdminButton";
@@ -60,11 +59,13 @@ function getInitialValues(initialValues) {
       category: "",
       description: "",
       shortDescription: "",
+
       entryFee: {
         adult: "",
         child: "",
         foreigner: "",
       },
+
       openingTime: "",
       closingTime: "",
       closedOn: "",
@@ -73,8 +74,10 @@ function getInitialValues(initialValues) {
       address: "",
       latitude: "",
       longitude: "",
+
       coverImage: null,
       gallery: [],
+
       isFeatured: false,
       isActive: true,
     };
@@ -104,6 +107,7 @@ function getInitialValues(initialValues) {
     bestTimeToVisit: initialValues.bestTimeToVisit || "",
     visitDuration: initialValues.visitDuration || "",
     address: initialValues.address || "",
+
     latitude: initialValues.latitude ?? "",
     longitude: initialValues.longitude ?? "",
 
@@ -112,14 +116,15 @@ function getInitialValues(initialValues) {
     gallery: normalizeGallery(initialValues.gallery),
 
     isFeatured: initialValues.isFeatured ?? false,
-
     isActive: initialValues.isActive ?? true,
   };
 }
 
-export default function PlaceForm({ initialValues = null }) {
-  const router = useRouter();
-
+export default function PlaceForm({
+  initialValues = null,
+  onSuccess = null,
+  onCancel = null,
+}) {
   const isEditMode = Boolean(initialValues?._id);
 
   const [formData, setFormData] = useState(() =>
@@ -134,7 +139,13 @@ export default function PlaceForm({ initialValues = null }) {
 
   const [galleryUploading, setGalleryUploading] = useState(false);
 
+  const [galleryRemovingIndex, setGalleryRemovingIndex] = useState(null);
+
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setFormData(getInitialValues(initialValues));
+  }, [initialValues]);
 
   useEffect(() => {
     loadDestinations();
@@ -173,29 +184,38 @@ export default function PlaceForm({ initialValues = null }) {
     }));
   }
 
+  function generateSlug() {
+    const slug = formData.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
+
+    updateField("slug", slug);
+  }
+
   async function handleGallerySelect(event) {
     const files = Array.from(event.target.files || []);
 
-    if (files.length === 0) {
+    if (!files.length) {
       return;
     }
 
     setError("");
     setGalleryUploading(true);
 
+    const uploadedImages = [];
+
     try {
-      const uploadedImages = [];
+      const token =
+        typeof window !== "undefined" ? sessionStorage.getItem("token") : null;
+
+      if (!token) {
+        throw new Error("Admin session not found. Please log in again.");
+      }
 
       for (const file of files) {
-        const token =
-          typeof window !== "undefined"
-            ? sessionStorage.getItem("token")
-            : null;
-
-        if (!token) {
-          throw new Error("Admin session not found. Please log in again.");
-        }
-
         const formDataUpload = new FormData();
 
         formDataUpload.append("file", file);
@@ -222,6 +242,12 @@ export default function PlaceForm({ initialValues = null }) {
           throw new Error(data.message || "Gallery image upload failed");
         }
 
+        if (!data.image?.url || !data.image?.publicId) {
+          throw new Error(
+            "Uploaded gallery image is missing Cloudinary information.",
+          );
+        }
+
         uploadedImages.push(data.image);
       }
 
@@ -232,6 +258,18 @@ export default function PlaceForm({ initialValues = null }) {
     } catch (error) {
       console.error("Gallery upload error:", error);
 
+      /*
+       * Clean up images that were successfully uploaded
+       * before a later upload failed.
+       */
+      if (uploadedImages.length) {
+        await Promise.allSettled(
+          uploadedImages
+            .filter((image) => image?.publicId)
+            .map((image) => deleteCloudinaryImage(image.publicId)),
+        );
+      }
+
       setError(error?.message || "Gallery image upload failed");
     } finally {
       setGalleryUploading(false);
@@ -240,38 +278,41 @@ export default function PlaceForm({ initialValues = null }) {
     }
   }
 
+  async function deleteCloudinaryImage(publicId) {
+    const token =
+      typeof window !== "undefined" ? sessionStorage.getItem("token") : null;
+
+    if (!token) {
+      throw new Error("Admin session not found. Please log in again.");
+    }
+
+    const response = await fetch("/api/upload/delete", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        publicId,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Failed to delete image");
+    }
+  }
+
   async function removeGalleryImage(index) {
     const image = formData.gallery[index];
 
     try {
       setError("");
+      setGalleryRemovingIndex(index);
 
       if (image?.publicId) {
-        const token =
-          typeof window !== "undefined"
-            ? sessionStorage.getItem("token")
-            : null;
-
-        if (!token) {
-          throw new Error("Admin session not found. Please log in again.");
-        }
-
-        const response = await fetch("/api/upload/delete", {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            publicId: image.publicId,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Failed to delete gallery image");
-        }
+        await deleteCloudinaryImage(image.publicId);
       }
 
       setFormData((previous) => ({
@@ -284,6 +325,8 @@ export default function PlaceForm({ initialValues = null }) {
       console.error("Gallery delete error:", error);
 
       setError(error?.message || "Failed to delete gallery image");
+    } finally {
+      setGalleryRemovingIndex(null);
     }
   }
 
@@ -310,6 +353,47 @@ export default function PlaceForm({ initialValues = null }) {
 
     if (!formData.coverImage?.url) {
       return "Cover image is required.";
+    }
+
+    /*
+     * New backend requires Cloudinary publicId.
+     * This also prevents an old URL-only image from being
+     * accidentally submitted during an edit.
+     */
+    if (!formData.coverImage?.publicId) {
+      return "Please replace the cover image with a newly uploaded Cloudinary image before saving.";
+    }
+
+    const numericFields = [
+      ["Adult fee", formData.entryFee.adult],
+      ["Child fee", formData.entryFee.child],
+      ["Foreigner fee", formData.entryFee.foreigner],
+    ];
+
+    for (const [label, value] of numericFields) {
+      if (value !== "") {
+        const number = Number(value);
+
+        if (!Number.isFinite(number) || number < 0) {
+          return `${label} must be a valid non-negative number.`;
+        }
+      }
+    }
+
+    if (formData.latitude !== "") {
+      const latitude = Number(formData.latitude);
+
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+        return "Latitude must be between -90 and 90.";
+      }
+    }
+
+    if (formData.longitude !== "") {
+      const longitude = Number(formData.longitude);
+
+      if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        return "Longitude must be between -180 and 180.";
+      }
     }
 
     return null;
@@ -380,14 +464,14 @@ export default function PlaceForm({ initialValues = null }) {
 
         coverImage: {
           url: formData.coverImage.url,
-          publicId: formData.coverImage.publicId || "",
+          publicId: formData.coverImage.publicId,
         },
 
         gallery: formData.gallery
-          .filter((image) => image?.url)
+          .filter((image) => image?.url && image?.publicId)
           .map((image) => ({
             url: image.url,
-            publicId: image.publicId || "",
+            publicId: image.publicId,
           })),
 
         isFeatured: formData.isFeatured,
@@ -410,15 +494,22 @@ export default function PlaceForm({ initialValues = null }) {
         throw new Error(response?.message || "Failed to save place");
       }
 
-      router.push("/admin/dashboard/places");
-
-      router.refresh();
+      if (typeof onSuccess === "function") {
+        await onSuccess(response);
+        return;
+      }
     } catch (error) {
       console.error("Save place error:", error);
 
       setError(error?.message || "Failed to save place");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function handleCancel() {
+    if (typeof onCancel === "function") {
+      onCancel();
     }
   }
 
@@ -431,14 +522,20 @@ export default function PlaceForm({ initialValues = null }) {
         </div>
       )}
 
-      {/* Basic Information */}
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="mb-5 text-lg font-semibold">Basic Information</h2>
+      {/* ============================================================
+          BASIC INFORMATION
+      ============================================================ */}
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <SectionTitle
+          title="Basic Information"
+          description="Add the main information about this tourist place."
+        />
 
         <div className="grid gap-5 md:grid-cols-2">
           {/* Destination */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-slate-700">
               Destination
               <span className="ml-1 text-red-500">*</span>
             </label>
@@ -449,7 +546,7 @@ export default function PlaceForm({ initialValues = null }) {
                 updateField("destination", event.target.value)
               }
               disabled={loadingDestinations}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 disabled:bg-slate-50"
             >
               <option value="">
                 {loadingDestinations
@@ -477,17 +574,36 @@ export default function PlaceForm({ initialValues = null }) {
           />
 
           {/* Slug */}
-          <InputField
-            label="Slug"
-            required
-            value={formData.slug}
-            onChange={(value) => updateField("slug", value)}
-            placeholder="marina-beach"
-          />
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Slug
+              <span className="ml-1 text-red-500">*</span>
+            </label>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.slug}
+                onChange={(event) => updateField("slug", event.target.value)}
+                placeholder="marina-beach"
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
+              />
+
+              <button
+                type="button"
+                onClick={generateSlug}
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+                title="Generate slug"
+              >
+                <Wand2 size={16} />
+                <span className="hidden sm:inline">Generate</span>
+              </button>
+            </div>
+          </div>
 
           {/* Category */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-slate-700">
               Category
               <span className="ml-1 text-red-500">*</span>
             </label>
@@ -495,7 +611,7 @@ export default function PlaceForm({ initialValues = null }) {
             <select
               value={formData.category}
               onChange={(event) => updateField("category", event.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
             >
               <option value="">Select category</option>
 
@@ -512,7 +628,7 @@ export default function PlaceForm({ initialValues = null }) {
 
         {/* Short Description */}
         <div className="mt-5">
-          <label className="mb-2 block text-sm font-medium text-gray-700">
+          <label className="mb-2 block text-sm font-medium text-slate-700">
             Short Description
           </label>
 
@@ -523,13 +639,13 @@ export default function PlaceForm({ initialValues = null }) {
             }
             rows={3}
             placeholder="Short description of the place..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
           />
         </div>
 
         {/* Description */}
         <div className="mt-5">
-          <label className="mb-2 block text-sm font-medium text-gray-700">
+          <label className="mb-2 block text-sm font-medium text-slate-700">
             Description
             <span className="ml-1 text-red-500">*</span>
           </label>
@@ -539,16 +655,21 @@ export default function PlaceForm({ initialValues = null }) {
             onChange={(event) => updateField("description", event.target.value)}
             rows={7}
             placeholder="Detailed description of the place..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+            className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
           />
         </div>
       </div>
 
-      {/* Images */}
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="mb-5 text-lg font-semibold">Images</h2>
+      {/* ============================================================
+          IMAGES
+      ============================================================ */}
 
-        {/* Cover */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <SectionTitle
+          title="Images"
+          description="Upload a cover image and additional gallery images."
+        />
+
         <ImageUpload
           label="Cover Image"
           required
@@ -559,32 +680,35 @@ export default function PlaceForm({ initialValues = null }) {
 
         {/* Gallery */}
         <div className="mt-8">
-          <label className="mb-3 block text-sm font-medium text-gray-700">
+          <label className="mb-3 block text-sm font-medium text-slate-700">
             Gallery Images
           </label>
 
           <label
-            className={`flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 transition hover:bg-gray-100 ${
+            className={`flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 transition hover:border-emerald-400 hover:bg-emerald-50 ${
               galleryUploading ? "pointer-events-none opacity-60" : ""
             }`}
           >
             {galleryUploading ? (
               <>
-                <Loader2 size={28} className="mb-2 animate-spin" />
+                <Loader2
+                  size={28}
+                  className="mb-2 animate-spin text-emerald-600"
+                />
 
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-slate-600">
                   Uploading images...
                 </span>
               </>
             ) : (
               <>
-                <ImagePlus size={30} className="mb-2" />
+                <ImagePlus size={30} className="mb-2 text-emerald-600" />
 
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-emerald-700">
                   Add Gallery Images
                 </span>
 
-                <span className="mt-1 text-xs text-gray-500">
+                <span className="mt-1 text-xs text-slate-500">
                   Select multiple images
                 </span>
               </>
@@ -605,7 +729,7 @@ export default function PlaceForm({ initialValues = null }) {
               {formData.gallery.map((image, index) => (
                 <div
                   key={image.publicId || `${image.url}-${index}`}
-                  className="group relative overflow-hidden rounded-xl border bg-gray-50"
+                  className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
                 >
                   <img
                     src={image.url}
@@ -616,10 +740,15 @@ export default function PlaceForm({ initialValues = null }) {
                   <button
                     type="button"
                     onClick={() => removeGalleryImage(index)}
-                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white opacity-0 shadow transition group-hover:opacity-100"
+                    disabled={galleryRemovingIndex === index}
+                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white opacity-0 shadow transition hover:bg-red-700 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-70"
                     title="Remove image"
                   >
-                    <X size={16} />
+                    {galleryRemovingIndex === index ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <X size={16} />
+                    )}
                   </button>
                 </div>
               ))}
@@ -628,9 +757,15 @@ export default function PlaceForm({ initialValues = null }) {
         </div>
       </div>
 
-      {/* Entry Fee */}
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="mb-5 text-lg font-semibold">Entry Fee</h2>
+      {/* ============================================================
+          ENTRY FEE
+      ============================================================ */}
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <SectionTitle
+          title="Entry Fee"
+          description="Set the admission fees for different visitor types."
+        />
 
         <div className="grid gap-5 md:grid-cols-3">
           <NumberField
@@ -656,9 +791,15 @@ export default function PlaceForm({ initialValues = null }) {
         </div>
       </div>
 
-      {/* Visiting Information */}
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="mb-5 text-lg font-semibold">Visiting Information</h2>
+      {/* ============================================================
+          VISITING INFORMATION
+      ============================================================ */}
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <SectionTitle
+          title="Visiting Information"
+          description="Provide opening hours and recommended visiting information."
+        />
 
         <div className="grid gap-5 md:grid-cols-2">
           <InputField
@@ -698,9 +839,15 @@ export default function PlaceForm({ initialValues = null }) {
         </div>
       </div>
 
-      {/* Location */}
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="mb-5 text-lg font-semibold">Location</h2>
+      {/* ============================================================
+          LOCATION
+      ============================================================ */}
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <SectionTitle
+          title="Location"
+          description="Add the address and geographic coordinates."
+        />
 
         <div className="space-y-5">
           <InputField
@@ -717,6 +864,8 @@ export default function PlaceForm({ initialValues = null }) {
               onChange={(value) => updateField("latitude", value)}
               placeholder="13.0827"
               step="any"
+              min="-90"
+              max="90"
             />
 
             <NumberField
@@ -725,14 +874,22 @@ export default function PlaceForm({ initialValues = null }) {
               onChange={(value) => updateField("longitude", value)}
               placeholder="80.2707"
               step="any"
+              min="-180"
+              max="180"
             />
           </div>
         </div>
       </div>
 
-      {/* Settings */}
-      <div className="rounded-2xl border bg-white p-6">
-        <h2 className="mb-5 text-lg font-semibold">Settings</h2>
+      {/* ============================================================
+          SETTINGS
+      ============================================================ */}
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+        <SectionTitle
+          title="Settings"
+          description="Control visibility and featured status."
+        />
 
         <div className="space-y-4">
           <label className="flex cursor-pointer items-center gap-3">
@@ -742,10 +899,10 @@ export default function PlaceForm({ initialValues = null }) {
               onChange={(event) =>
                 updateField("isFeatured", event.target.checked)
               }
-              className="h-4 w-4 rounded border-gray-300"
+              className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
             />
 
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-medium text-slate-700">
               Featured place
             </span>
           </label>
@@ -757,26 +914,36 @@ export default function PlaceForm({ initialValues = null }) {
               onChange={(event) =>
                 updateField("isActive", event.target.checked)
               }
-              className="h-4 w-4 rounded border-gray-300"
+              className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
             />
 
-            <span className="text-sm font-medium text-gray-700">Active</span>
+            <span className="text-sm font-medium text-slate-700">Active</span>
           </label>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex justify-end gap-3">
-        <AdminButton
-          type="button"
-          variant="secondary"
-          onClick={() => router.push("/admin/dashboard/places")}
-          disabled={submitting}
-        >
-          Cancel
-        </AdminButton>
+      {/* ============================================================
+          ACTIONS
+      ============================================================ */}
 
-        <AdminButton type="submit" disabled={submitting}>
+      <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row">
+        {onCancel && (
+          <AdminButton
+            type="button"
+            variant="secondary"
+            onClick={handleCancel}
+            disabled={submitting}
+          >
+            Cancel
+          </AdminButton>
+        )}
+
+        <AdminButton
+          type="submit"
+          disabled={
+            submitting || galleryUploading || galleryRemovingIndex !== null
+          }
+        >
           {submitting && <Loader2 size={18} className="animate-spin" />}
 
           {submitting
@@ -790,6 +957,26 @@ export default function PlaceForm({ initialValues = null }) {
   );
 }
 
+/* ================================================================
+   SECTION TITLE
+================================================================ */
+
+function SectionTitle({ title, description }) {
+  return (
+    <div className="mb-5">
+      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+
+      {description && (
+        <p className="mt-1 text-sm text-slate-500">{description}</p>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   INPUT
+================================================================ */
+
 function InputField({
   label,
   required = false,
@@ -800,7 +987,7 @@ function InputField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-gray-700">
+      <label className="mb-2 block text-sm font-medium text-slate-700">
         {label}
 
         {required && <span className="ml-1 text-red-500">*</span>}
@@ -811,27 +998,40 @@ function InputField({
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+        className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
       />
     </div>
   );
 }
 
-function NumberField({ label, value, onChange, placeholder = "", step = "1" }) {
+/* ================================================================
+   NUMBER INPUT
+================================================================ */
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  placeholder = "",
+  step = "1",
+  min,
+  max,
+}) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-gray-700">
+      <label className="mb-2 block text-sm font-medium text-slate-700">
         {label}
       </label>
 
       <input
         type="number"
-        min="0"
+        min={min}
+        max={max}
         step={step}
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+        className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
       />
     </div>
   );

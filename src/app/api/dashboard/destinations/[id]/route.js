@@ -4,6 +4,13 @@ import mongoose from "mongoose";
 import connectDB from "@/utils/mongodb";
 import { Destination } from "@/utils/schema";
 import { requireAdmin } from "@/utils/adminAuth";
+import cloudinary from "@/utils/cloudinary";
+
+/*
+ * =========================================================
+ * GET SINGLE DESTINATION
+ * =========================================================
+ */
 
 export async function GET(request, { params }) {
   try {
@@ -15,7 +22,7 @@ export async function GET(request, { params }) {
           success: false,
           message: "Unauthorized",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -33,14 +40,13 @@ export async function GET(request, { params }) {
           success: false,
           message: "Invalid destination ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     await connectDB();
 
-    const destination =
-      await Destination.findById(id).lean();
+    const destination = await Destination.findById(id).lean();
 
     if (!destination) {
       return NextResponse.json(
@@ -48,7 +54,7 @@ export async function GET(request, { params }) {
           success: false,
           message: "Destination not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -64,10 +70,16 @@ export async function GET(request, { params }) {
         success: false,
         message: "Failed to fetch destination",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
+
+/*
+ * =========================================================
+ * UPDATE DESTINATION
+ * =========================================================
+ */
 
 export async function PUT(request, { params }) {
   try {
@@ -79,7 +91,7 @@ export async function PUT(request, { params }) {
           success: false,
           message: "Unauthorized",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -97,7 +109,7 @@ export async function PUT(request, { params }) {
           success: false,
           message: "Invalid destination ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -145,16 +157,13 @@ export async function PUT(request, { params }) {
      * -----------------------------------------------
      */
 
-    if (
-      updateData.name !== undefined &&
-      !String(updateData.name).trim()
-    ) {
+    if (updateData.name !== undefined && !String(updateData.name).trim()) {
       return NextResponse.json(
         {
           success: false,
           message: "Destination name cannot be empty",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -167,7 +176,7 @@ export async function PUT(request, { params }) {
           success: false,
           message: "Country cannot be empty",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -180,7 +189,7 @@ export async function PUT(request, { params }) {
           success: false,
           message: "Description cannot be empty",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -191,52 +200,43 @@ export async function PUT(request, { params }) {
      */
 
     if (updateData.name !== undefined) {
-      updateData.name =
-        String(updateData.name).trim();
+      updateData.name = String(updateData.name).trim();
     }
 
     if (updateData.country !== undefined) {
-      updateData.country =
-        String(updateData.country).trim();
+      updateData.country = String(updateData.country).trim();
     }
 
     if (updateData.state !== undefined) {
-      updateData.state =
-        String(updateData.state || "").trim();
+      updateData.state = String(updateData.state || "").trim();
     }
 
     if (updateData.description !== undefined) {
-      updateData.description =
-        String(updateData.description).trim();
+      updateData.description = String(updateData.description).trim();
     }
 
     if (updateData.shortDescription !== undefined) {
-      updateData.shortDescription =
-        String(
-          updateData.shortDescription || ""
-        ).trim();
+      updateData.shortDescription = String(
+        updateData.shortDescription || "",
+      ).trim();
     }
 
     if (updateData.bestTimeToVisit !== undefined) {
-      updateData.bestTimeToVisit =
-        String(
-          updateData.bestTimeToVisit || ""
-        ).trim();
+      updateData.bestTimeToVisit = String(
+        updateData.bestTimeToVisit || "",
+      ).trim();
     }
 
     if (updateData.language !== undefined) {
-      updateData.language =
-        String(updateData.language || "").trim();
+      updateData.language = String(updateData.language || "").trim();
     }
 
     if (updateData.currency !== undefined) {
-      updateData.currency =
-        String(updateData.currency || "").trim();
+      updateData.currency = String(updateData.currency || "").trim();
     }
 
     if (updateData.address !== undefined) {
-      updateData.address =
-        String(updateData.address || "").trim();
+      updateData.address = String(updateData.address || "").trim();
     }
 
     /*
@@ -246,11 +246,7 @@ export async function PUT(request, { params }) {
      */
 
     if (updateData.slug !== undefined) {
-      updateData.slug = String(
-        updateData.slug
-      )
-        .trim()
-        .toLowerCase();
+      updateData.slug = String(updateData.slug).trim().toLowerCase();
 
       if (!updateData.slug) {
         return NextResponse.json(
@@ -258,24 +254,22 @@ export async function PUT(request, { params }) {
             success: false,
             message: "Slug cannot be empty",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
-      const duplicate =
-        await Destination.findOne({
-          slug: updateData.slug,
-          _id: { $ne: id },
-        });
+      const duplicate = await Destination.findOne({
+        slug: updateData.slug,
+        _id: { $ne: id },
+      });
 
       if (duplicate) {
         return NextResponse.json(
           {
             success: false,
-            message:
-              "Destination slug already exists",
+            message: "Destination slug already exists",
           },
-          { status: 409 }
+          { status: 409 },
         );
       }
     }
@@ -284,15 +278,6 @@ export async function PUT(request, { params }) {
      * -----------------------------------------------
      * COVER IMAGE
      * -----------------------------------------------
-     *
-     * Cloudinary format:
-     *
-     * {
-     *   url: "...",
-     *   publicId: "..."
-     * }
-     *
-     * Only validate it if it is being updated.
      */
 
     if (updateData.coverImage !== undefined) {
@@ -310,7 +295,7 @@ export async function PUT(request, { params }) {
             message:
               "Cover image must contain a valid Cloudinary URL and public ID",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -333,25 +318,19 @@ export async function PUT(request, { params }) {
             success: false,
             message: "Gallery must be an array",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
-      updateData.gallery =
-        updateData.gallery
-          .filter(
-            (image) =>
-              image &&
-              typeof image === "object" &&
-              image.url &&
-              image.publicId
-          )
-          .map((image) => ({
-            url: String(image.url).trim(),
-            publicId: String(
-              image.publicId
-            ).trim(),
-          }));
+      updateData.gallery = updateData.gallery
+        .filter(
+          (image) =>
+            image && typeof image === "object" && image.url && image.publicId,
+        )
+        .map((image) => ({
+          url: String(image.url).trim(),
+          publicId: String(image.publicId).trim(),
+        }));
     }
 
     /*
@@ -361,24 +340,18 @@ export async function PUT(request, { params }) {
      */
 
     if (updateData.latitude !== undefined) {
-      if (
-        updateData.latitude === "" ||
-        updateData.latitude === null
-      ) {
+      if (updateData.latitude === "" || updateData.latitude === null) {
         updateData.latitude = undefined;
       } else {
-        const latitude = Number(
-          updateData.latitude
-        );
+        const latitude = Number(updateData.latitude);
 
         if (Number.isNaN(latitude)) {
           return NextResponse.json(
             {
               success: false,
-              message:
-                "Latitude must be a valid number",
+              message: "Latitude must be a valid number",
             },
-            { status: 400 }
+            { status: 400 },
           );
         }
 
@@ -387,24 +360,18 @@ export async function PUT(request, { params }) {
     }
 
     if (updateData.longitude !== undefined) {
-      if (
-        updateData.longitude === "" ||
-        updateData.longitude === null
-      ) {
+      if (updateData.longitude === "" || updateData.longitude === null) {
         updateData.longitude = undefined;
       } else {
-        const longitude = Number(
-          updateData.longitude
-        );
+        const longitude = Number(updateData.longitude);
 
         if (Number.isNaN(longitude)) {
           return NextResponse.json(
             {
               success: false,
-              message:
-                "Longitude must be a valid number",
+              message: "Longitude must be a valid number",
             },
-            { status: 400 }
+            { status: 400 },
           );
         }
 
@@ -419,15 +386,11 @@ export async function PUT(request, { params }) {
      */
 
     if (updateData.isFeatured !== undefined) {
-      updateData.isFeatured = Boolean(
-        updateData.isFeatured
-      );
+      updateData.isFeatured = Boolean(updateData.isFeatured);
     }
 
     if (updateData.isActive !== undefined) {
-      updateData.isActive = Boolean(
-        updateData.isActive
-      );
+      updateData.isActive = Boolean(updateData.isActive);
     }
 
     /*
@@ -436,15 +399,10 @@ export async function PUT(request, { params }) {
      * -----------------------------------------------
      */
 
-    const destination =
-      await Destination.findByIdAndUpdate(
-        id,
-        updateData,
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
+    const destination = await Destination.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!destination) {
       return NextResponse.json(
@@ -452,48 +410,36 @@ export async function PUT(request, { params }) {
           success: false,
           message: "Destination not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     return NextResponse.json({
       success: true,
-      message:
-        "Destination updated successfully",
+      message: "Destination updated successfully",
       data: destination,
     });
   } catch (error) {
     console.error("PUT destination error:", error);
-
-    /*
-     * Mongoose validation error
-     */
 
     if (error?.name === "ValidationError") {
       return NextResponse.json(
         {
           success: false,
           message: "Validation failed",
-          errors: Object.values(error.errors).map(
-            (item) => item.message
-          ),
+          errors: Object.values(error.errors).map((item) => item.message),
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
-
-    /*
-     * Duplicate slug
-     */
 
     if (error?.code === 11000) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "A destination with this slug already exists",
+          message: "A destination with this slug already exists",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -502,10 +448,25 @@ export async function PUT(request, { params }) {
         success: false,
         message: "Failed to update destination",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
+
+/*
+ * =========================================================
+ * PERMANENT DELETE DESTINATION
+ * =========================================================
+ *
+ * Deletes:
+ *
+ * 1. Destination MongoDB document
+ * 2. Cloudinary cover image
+ * 3. Cloudinary gallery images
+ *
+ * IMPORTANT:
+ * Every image must have a publicId for Cloudinary deletion.
+ */
 
 export async function DELETE(request, { params }) {
   try {
@@ -517,7 +478,7 @@ export async function DELETE(request, { params }) {
           success: false,
           message: "Unauthorized",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -535,7 +496,7 @@ export async function DELETE(request, { params }) {
           success: false,
           message: "Invalid destination ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -543,24 +504,14 @@ export async function DELETE(request, { params }) {
 
     /*
      * -----------------------------------------------
-     * SOFT DELETE
+     * FIND DESTINATION FIRST
      * -----------------------------------------------
      *
-     * We intentionally do NOT delete Cloudinary
-     * images here because this is only a soft delete.
+     * We need the image public IDs before deleting
+     * the MongoDB document.
      */
 
-    const destination =
-      await Destination.findByIdAndUpdate(
-        id,
-        {
-          isActive: false,
-        },
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
+    const destination = await Destination.findById(id).lean();
 
     if (!destination) {
       return NextResponse.json(
@@ -568,29 +519,154 @@ export async function DELETE(request, { params }) {
           success: false,
           message: "Destination not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
+    }
+
+    /*
+     * -----------------------------------------------
+     * COLLECT CLOUDINARY PUBLIC IDS
+     * -----------------------------------------------
+     */
+
+    const publicIds = [
+      destination.coverImage?.publicId,
+
+      ...(Array.isArray(destination.gallery)
+        ? destination.gallery.map((image) => image?.publicId)
+        : []),
+    ].filter(Boolean);
+
+    /*
+     * Remove duplicates just in case.
+     */
+
+    const uniquePublicIds = [...new Set(publicIds)];
+
+    /*
+     * -----------------------------------------------
+     * DELETE MONGODB DOCUMENT
+     * -----------------------------------------------
+     *
+     * This is a REAL permanent delete.
+     */
+
+    const deletedDestination = await Destination.findByIdAndDelete(id);
+
+    if (!deletedDestination) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Destination could not be deleted",
+        },
+        { status: 404 },
+      );
+    }
+
+    /*
+     * -----------------------------------------------
+     * DELETE CLOUDINARY IMAGES
+     * -----------------------------------------------
+     *
+     * MongoDB has already been deleted.
+     *
+     * We use allSettled so that if one image fails,
+     * the remaining images are still attempted.
+     */
+
+    const cloudinaryResults = await Promise.allSettled(
+      uniquePublicIds.map(async (publicId) => {
+        try {
+          const result = await cloudinary.uploader.destroy(publicId, {
+            resource_type: "image",
+          });
+
+          return {
+            publicId,
+            result: result?.result || null,
+          };
+        } catch (error) {
+          throw {
+            publicId,
+            message: error?.message || "Cloudinary deletion failed",
+          };
+        }
+      }),
+    );
+
+    /*
+     * -----------------------------------------------
+     * PROCESS CLOUDINARY RESULTS
+     * -----------------------------------------------
+     */
+
+    const cloudinaryDeleted = [];
+    const cloudinaryFailed = [];
+
+    for (const result of cloudinaryResults) {
+      if (result.status === "fulfilled") {
+        /*
+         * Cloudinary returns:
+         *
+         * result: "ok"
+         *
+         * or:
+         *
+         * result: "not found"
+         *
+         * "not found" is treated as already cleaned.
+         */
+
+        cloudinaryDeleted.push({
+          publicId: result.value.publicId,
+          result: result.value.result,
+        });
+      } else {
+        cloudinaryFailed.push({
+          publicId: result.reason?.publicId || null,
+          message: result.reason?.message || "Cloudinary deletion failed",
+        });
+      }
+    }
+
+    /*
+     * -----------------------------------------------
+     * RESPONSE
+     * -----------------------------------------------
+     */
+
+    if (cloudinaryFailed.length > 0) {
+      return NextResponse.json({
+        success: true,
+        message:
+          "Destination deleted, but some Cloudinary images could not be removed.",
+        data: {
+          deletedDestinationId: id,
+          cloudinaryDeleted,
+          cloudinaryFailed,
+        },
+      });
     }
 
     return NextResponse.json({
       success: true,
       message:
-        "Destination deactivated successfully",
-      data: destination,
+        "Destination and associated Cloudinary images deleted successfully",
+      data: {
+        deletedDestinationId: id,
+        cloudinaryDeleted,
+        cloudinaryFailed: [],
+      },
     });
   } catch (error) {
-    console.error(
-      "DELETE destination error:",
-      error
-    );
+    console.error("DELETE destination error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Failed to deactivate destination",
+        message: "Failed to delete destination",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

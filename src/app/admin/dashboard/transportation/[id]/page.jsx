@@ -1,47 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { X, Loader2, Pencil } from "lucide-react";
+import { AlertCircle, LoaderCircle, Pencil, Route, X } from "lucide-react";
 
-import TransportationForm from "@/components/admin/TransportationForm";
 import { adminApi } from "@/utils/adminApi";
+import TransportationForm from "@/components/admin/TransportationForm";
 
 export default function TransportationDetailsPage() {
-  const { id } = useParams();
   const router = useRouter();
+  const params = useParams();
   const searchParams = useSearchParams();
 
+  const id = params?.id;
   const isViewMode = searchParams.get("view") === "true";
 
-  const [item, setItem] = useState(null);
+  const [transportation, setTransportation] = useState(null);
   const [destinations, setDestinations] = useState([]);
+
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!id) return;
-
-    async function loadData() {
-      try {
-        const [transportationResponse, destinationsResponse] =
-          await Promise.all([
-            adminApi.get(`/api/dashboard/transportation/${id}`),
-            adminApi.get("/api/dashboard/destinations"),
-          ]);
-
-        setItem(transportationResponse.data);
-        setDestinations(destinationsResponse.data || []);
-      } catch (error) {
-        alert(error.message);
-      } finally {
-        setLoading(false);
-      }
+  const loadData = useCallback(async () => {
+    if (!id) {
+      return;
     }
 
-    loadData();
+    try {
+      setLoading(true);
+      setError("");
+
+      const [transportResponse, destinationResponse] = await Promise.all([
+        adminApi.get(`/api/dashboard/transportation/${id}`),
+        adminApi.get("/api/dashboard/destinations"),
+      ]);
+
+      setTransportation(transportResponse?.data || null);
+      setDestinations(destinationResponse?.data || []);
+    } catch (err) {
+      console.error("Failed to load transportation:", err);
+
+      setError(err?.message || "Unable to load transportation details.");
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
-  function closeModal() {
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  function closePopup() {
     router.push("/admin/dashboard/transportation");
   }
 
@@ -49,90 +58,143 @@ export default function TransportationDetailsPage() {
     router.push(`/admin/dashboard/transportation/${id}`);
   }
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900">
-          <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!item) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-            Transportation not found
-          </h2>
-
-          <button
-            onClick={closeModal}
-            className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-medium text-white"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    );
+  function handleSaved() {
+    closePopup();
   }
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 px-4 py-6 backdrop-blur-sm sm:px-6"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
-          closeModal();
+          closePopup();
         }
       }}
     >
-      <div className="mx-auto flex min-h-full max-w-6xl items-center justify-center">
-        <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
-          {/* Modal Header */}
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:px-6">
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                {isViewMode ? "Transportation Details" : "Edit Transportation"}
+      <div className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-[92vh] sm:max-w-5xl sm:rounded-2xl">
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-emerald-100 bg-white px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+              <Route size={19} />
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="truncate text-sm font-bold text-slate-900 sm:text-base">
+                {isViewMode
+                  ? "Transportation Details"
+                  : transportation
+                    ? `Edit ${transportation.providerName}`
+                    : "Edit Transportation"}
               </h1>
 
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {item.providerName} • {item.type}
+              <p className="hidden text-xs text-slate-400 sm:block">
+                {isViewMode
+                  ? "View transportation information"
+                  : "Update transportation information"}
               </p>
             </div>
+          </div>
 
-            <div className="flex items-center gap-2">
-              {isViewMode && (
-                <button
-                  type="button"
-                  onClick={switchToEdit}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit
-                </button>
-              )}
-
+          <div className="flex items-center gap-2">
+            {isViewMode && transportation ? (
               <button
                 type="button"
-                onClick={closeModal}
-                className="rounded-xl border border-slate-300 p-2.5 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                aria-label="Close"
+                onClick={switchToEdit}
+                className="hidden items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:inline-flex"
               >
-                <X className="h-5 w-5" />
+                <Pencil size={14} />
+                Edit
               </button>
-            </div>
-          </div>
+            ) : null}
 
-          {/* Modal Body */}
-          <div className="max-h-[calc(100vh-110px)] overflow-y-auto p-4 sm:p-6">
-            <TransportationForm
-              initialValues={item}
-              destinations={destinations}
-              mode={isViewMode ? "view" : "edit"}
-              readOnly={isViewMode}
-            />
+            <button
+              type="button"
+              onClick={closePopup}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
           </div>
+        </div>
+
+        {/* Content */}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-emerald-50/20">
+          {loading ? (
+            <div className="flex min-h-[500px] items-center justify-center">
+              <div className="flex flex-col items-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50">
+                  <LoaderCircle
+                    size={25}
+                    className="animate-spin text-emerald-600"
+                  />
+                </div>
+
+                <p className="mt-4 text-sm font-semibold text-slate-600">
+                  Loading transportation...
+                </p>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="flex min-h-[500px] items-center justify-center px-5">
+              <div className="w-full max-w-md rounded-2xl border border-red-200 bg-red-50 p-5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-red-600">
+                  <AlertCircle size={20} />
+                </div>
+
+                <h2 className="mt-4 text-sm font-bold text-red-800">
+                  Unable to load transportation
+                </h2>
+
+                <p className="mt-1 text-xs leading-5 text-red-600">{error}</p>
+
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={loadData}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700"
+                  >
+                    Try Again
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={closePopup}
+                    className="rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : !transportation ? (
+            <div className="flex min-h-[500px] items-center justify-center">
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-700">
+                  Transportation not found.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={closePopup}
+                  className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <TransportationForm
+              initialValues={transportation}
+              transportationId={id}
+              destinations={destinations}
+              mode="edit"
+              readOnly={isViewMode}
+              onSuccess={handleSaved}
+              onCancel={closePopup}
+            />
+          )}
         </div>
       </div>
     </div>

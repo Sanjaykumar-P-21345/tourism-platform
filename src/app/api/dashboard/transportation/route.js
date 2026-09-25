@@ -1,23 +1,55 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
+
 import connectDB from "@/utils/mongodb";
-import { Destination, Transportation } from "@/utils/schema";
 import { requireAdmin } from "@/utils/adminAuth";
+import { Transportation, Destination } from "@/utils/schema";
+
+const TRANSPORTATION_TYPES = [
+  "flight",
+  "train",
+  "bus",
+  "taxi",
+  "car-rental",
+  "bike-rental",
+];
+
+function cleanString(value) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  return String(value).trim();
+}
 
 function normalizeImage(image) {
-  if (!image) return null;
+  if (!image) {
+    return null;
+  }
 
   if (typeof image === "string") {
+    const url = image.trim();
+
+    if (!url) {
+      return null;
+    }
+
     return {
-      url: image.trim(),
+      url,
       publicId: "",
     };
   }
 
   if (typeof image === "object" && image.url) {
+    const url = String(image.url).trim();
+
+    if (!url) {
+      return null;
+    }
+
     return {
-      url: String(image.url).trim(),
-      publicId: String(image.publicId || "").trim(),
+      url,
+      publicId: image.publicId ? String(image.publicId).trim() : "",
     };
   }
 
@@ -25,19 +57,57 @@ function normalizeImage(image) {
 }
 
 function normalizeGallery(gallery) {
-  if (!Array.isArray(gallery)) return [];
+  if (!Array.isArray(gallery)) {
+    return [];
+  }
 
-  return gallery.map(normalizeImage).filter((image) => image?.url);
+  return gallery.map(normalizeImage).filter(Boolean);
 }
 
-function normalizeNumber(value) {
-  if (value === "" || value === null || value === undefined) {
+function parseOptionalNumber(value) {
+  if (value === undefined || value === null || value === "") {
     return undefined;
   }
 
   const number = Number(value);
 
-  return Number.isFinite(number) ? number : undefined;
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function parseBoolean(value, defaultValue = true) {
+  if (value === undefined || value === null) {
+    return defaultValue;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return value.toLowerCase() === "true";
+  }
+
+  return Boolean(value);
+}
+
+function validateCost(min, max) {
+  if (Number.isNaN(min) || Number.isNaN(max)) {
+    return "Estimated cost must contain valid numbers";
+  }
+
+  if (min !== undefined && min < 0) {
+    return "Minimum estimated cost cannot be negative";
+  }
+
+  if (max !== undefined && max < 0) {
+    return "Maximum estimated cost cannot be negative";
+  }
+
+  if (min !== undefined && max !== undefined && min > max) {
+    return "Minimum cost cannot be greater than maximum cost";
+  }
+
+  return null;
 }
 
 export async function GET(request) {
@@ -66,7 +136,7 @@ export async function GET(request) {
       data: transportation,
     });
   } catch (error) {
-    console.error("GET transportation error:", error);
+    console.error("Transportation GET error:", error);
 
     return NextResponse.json(
       {
@@ -96,50 +166,21 @@ export async function POST(request) {
 
     const body = await request.json();
 
-    const {
-      destination,
-      type,
-      providerName,
-      from,
-      to,
-      description,
-      estimatedCost,
-      estimatedDuration,
-      schedule,
-      bookingUrl,
-      contactPhone,
-      coverImage,
-      gallery,
-      isActive,
-    } = body;
+    const destination = cleanString(body.destination);
+
+    const type = cleanString(body.type);
+
+    const providerName = cleanString(body.providerName);
+
+    const from = cleanString(body.from);
+
+    const to = cleanString(body.to);
 
     if (!destination || !type || !providerName || !from || !to) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Destination, transportation type, provider name, from and to are required",
-        },
-        { status: 400 },
-      );
-    }
-
-    const allowedTypes = [
-      "flight",
-      "train",
-      "bus",
-      "taxi",
-      "car-rental",
-      "bike-rental",
-    ];
-
-    if (!allowedTypes.includes(type)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `Invalid transportation type. Allowed values: ${allowedTypes.join(
-            ", ",
-          )}`,
+          message: "Destination, type, provider name, from and to are required",
         },
         { status: 400 },
       );
@@ -149,7 +190,17 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid destination ID",
+          message: "Invalid destination",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!TRANSPORTATION_TYPES.includes(type)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid transportation type",
         },
         { status: 400 },
       );
@@ -163,67 +214,79 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Destination not found",
-        },
-        { status: 404 },
-      );
-    }
-
-    const normalizedCoverImage = normalizeImage(coverImage);
-    const normalizedGallery = normalizeGallery(gallery);
-
-    const minCost = normalizeNumber(estimatedCost?.min);
-    const maxCost = normalizeNumber(estimatedCost?.max);
-
-    if (minCost !== undefined && maxCost !== undefined && minCost > maxCost) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Minimum estimated cost cannot be greater than maximum cost",
+          message: "Selected destination was not found",
         },
         { status: 400 },
       );
     }
 
+    const estimatedMin = parseOptionalNumber(body.estimatedCost?.min);
+
+    const estimatedMax = parseOptionalNumber(body.estimatedCost?.max);
+
+    const costError = validateCost(estimatedMin, estimatedMax);
+
+    if (costError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: costError,
+        },
+        { status: 400 },
+      );
+    }
+
+    const coverImage = normalizeImage(body.coverImage);
+
+    const gallery = normalizeGallery(body.gallery);
+
     const transportation = await Transportation.create({
       destination,
       type,
-      providerName: providerName.trim(),
-      from: from.trim(),
-      to: to.trim(),
-      description: description?.trim() || undefined,
+      providerName,
+      from,
+      to,
+
+      description: cleanString(body.description),
 
       estimatedCost: {
-        min: minCost,
-        max: maxCost,
+        ...(estimatedMin !== undefined ? { min: estimatedMin } : {}),
+        ...(estimatedMax !== undefined ? { max: estimatedMax } : {}),
       },
 
-      estimatedDuration: estimatedDuration?.trim() || undefined,
-      schedule: schedule?.trim() || undefined,
-      bookingUrl: bookingUrl?.trim() || undefined,
-      contactPhone: contactPhone?.trim() || undefined,
+      estimatedDuration: cleanString(body.estimatedDuration),
 
-      coverImage: normalizedCoverImage,
-      gallery: normalizedGallery,
+      schedule: cleanString(body.schedule),
 
-      isActive: isActive ?? true,
+      bookingUrl: cleanString(body.bookingUrl),
+
+      contactPhone: cleanString(body.contactPhone),
+
+      coverImage,
+      gallery,
+
+      isActive: parseBoolean(body.isActive, true),
     });
+
+    const populated = await Transportation.findById(transportation._id)
+      .populate("destination", "name slug")
+      .lean();
 
     return NextResponse.json(
       {
         success: true,
         message: "Transportation created successfully",
-        data: transportation,
+        data: populated,
       },
       { status: 201 },
     );
   } catch (error) {
-    console.error("POST transportation error:", error);
+    console.error("Transportation POST error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to create transportation",
+        message: error?.message || "Failed to create transportation",
       },
       { status: 500 },
     );

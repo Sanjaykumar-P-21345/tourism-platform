@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import connectDB from "@/utils/mongodb";
 import { Destination } from "@/utils/schema";
 import { requireAdmin } from "@/utils/adminAuth";
@@ -13,7 +14,7 @@ export async function GET(request) {
           success: false,
           message: "Unauthorized",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -35,7 +36,7 @@ export async function GET(request) {
         success: false,
         message: "Failed to fetch destinations",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -50,7 +51,7 @@ export async function POST(request) {
           success: false,
           message: "Unauthorized",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -80,31 +81,76 @@ export async function POST(request) {
 
     /*
      * -----------------------------------------------
-     * REQUIRED FIELD VALIDATION
+     * REQUIRED FIELDS
      * -----------------------------------------------
      */
 
-    if (
-      !name ||
-      !slug ||
-      !type ||
-      !country ||
-      !description ||
-      !coverImage
-    ) {
+    if (!name || !slug || !type || !country || !description || !coverImage) {
       return NextResponse.json(
         {
           success: false,
           message:
             "Name, slug, type, country, description and cover image are required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     /*
      * -----------------------------------------------
-     * COVER IMAGE VALIDATION
+     * NORMALIZE BASIC VALUES
+     * -----------------------------------------------
+     */
+
+    const normalizedName = String(name).trim();
+    const normalizedSlug = String(slug).trim().toLowerCase();
+    const normalizedType = String(type).trim();
+    const normalizedCountry = String(country).trim();
+    const normalizedDescription = String(description).trim();
+
+    if (!normalizedName) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Destination name cannot be empty",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!normalizedSlug) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Slug cannot be empty",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!normalizedCountry) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Country cannot be empty",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!normalizedDescription) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Description cannot be empty",
+        },
+        { status: 400 },
+      );
+    }
+
+    /*
+     * -----------------------------------------------
+     * COVER IMAGE
      * -----------------------------------------------
      */
 
@@ -119,13 +165,18 @@ export async function POST(request) {
           message:
             "Cover image must contain a valid Cloudinary URL and public ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
+    const normalizedCoverImage = {
+      url: String(coverImage.url).trim(),
+      publicId: String(coverImage.publicId).trim(),
+    };
+
     /*
      * -----------------------------------------------
-     * GALLERY VALIDATION
+     * GALLERY
      * -----------------------------------------------
      */
 
@@ -135,7 +186,7 @@ export async function POST(request) {
           success: false,
           message: "Gallery must be an array",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -143,24 +194,13 @@ export async function POST(request) {
       ? gallery
           .filter(
             (image) =>
-              image &&
-              typeof image === "object" &&
-              image.url &&
-              image.publicId
+              image && typeof image === "object" && image.url && image.publicId,
           )
           .map((image) => ({
-            url: image.url.trim(),
-            publicId: image.publicId.trim(),
+            url: String(image.url).trim(),
+            publicId: String(image.publicId).trim(),
           }))
       : [];
-
-    /*
-     * -----------------------------------------------
-     * NORMALIZE SLUG
-     * -----------------------------------------------
-     */
-
-    const normalizedSlug = slug.trim().toLowerCase();
 
     /*
      * -----------------------------------------------
@@ -178,96 +218,89 @@ export async function POST(request) {
           success: false,
           message: "Destination slug already exists",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
     /*
      * -----------------------------------------------
-     * CREATE DESTINATION
+     * COORDINATES
+     * -----------------------------------------------
+     */
+
+    let normalizedLatitude;
+    let normalizedLongitude;
+
+    if (latitude !== undefined && latitude !== null && latitude !== "") {
+      normalizedLatitude = Number(latitude);
+
+      if (Number.isNaN(normalizedLatitude)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Latitude must be a valid number",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (longitude !== undefined && longitude !== null && longitude !== "") {
+      normalizedLongitude = Number(longitude);
+
+      if (Number.isNaN(normalizedLongitude)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Longitude must be a valid number",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    /*
+     * -----------------------------------------------
+     * CREATE
      * -----------------------------------------------
      */
 
     const destination = await Destination.create({
-      name: name.trim(),
+      name: normalizedName,
 
       slug: normalizedSlug,
 
-      type,
+      type: normalizedType,
 
-      country: country.trim(),
+      country: normalizedCountry,
 
-      state:
-        typeof state === "string"
-          ? state.trim()
-          : "",
+      state: typeof state === "string" ? state.trim() : "",
 
-      description: description.trim(),
+      description: normalizedDescription,
 
       shortDescription:
-        typeof shortDescription === "string"
-          ? shortDescription.trim()
-          : "",
+        typeof shortDescription === "string" ? shortDescription.trim() : "",
 
       bestTimeToVisit:
-        typeof bestTimeToVisit === "string"
-          ? bestTimeToVisit.trim()
-          : "",
+        typeof bestTimeToVisit === "string" ? bestTimeToVisit.trim() : "",
 
-      language:
-        typeof language === "string"
-          ? language.trim()
-          : "",
+      language: typeof language === "string" ? language.trim() : "",
 
-      currency:
-        typeof currency === "string"
-          ? currency.trim()
-          : "",
+      currency: typeof currency === "string" ? currency.trim() : "",
 
-      /*
-       * Cloudinary image object
-       */
-      coverImage: {
-        url: coverImage.url.trim(),
-        publicId: coverImage.publicId.trim(),
-      },
+      coverImage: normalizedCoverImage,
 
-      /*
-       * Cloudinary gallery
-       */
       gallery: normalizedGallery,
 
-      /*
-       * Convert coordinates to numbers
-       */
-      latitude:
-        latitude !== undefined &&
-        latitude !== null &&
-        latitude !== ""
-          ? Number(latitude)
-          : undefined,
+      latitude: normalizedLatitude,
 
-      longitude:
-        longitude !== undefined &&
-        longitude !== null &&
-        longitude !== ""
-          ? Number(longitude)
-          : undefined,
+      longitude: normalizedLongitude,
 
-      address:
-        typeof address === "string"
-          ? address.trim()
-          : "",
+      address: typeof address === "string" ? address.trim() : "",
 
-      isFeatured:
-        typeof isFeatured === "boolean"
-          ? isFeatured
-          : false,
+      isFeatured: typeof isFeatured === "boolean" ? isFeatured : false,
 
-      isActive:
-        typeof isActive === "boolean"
-          ? isActive
-          : true,
+      isActive: typeof isActive === "boolean" ? isActive : true,
     });
 
     return NextResponse.json(
@@ -276,38 +309,29 @@ export async function POST(request) {
         message: "Destination created successfully",
         data: destination,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("POST destination error:", error);
 
-    /*
-     * Handle Mongoose validation errors
-     */
     if (error?.name === "ValidationError") {
       return NextResponse.json(
         {
           success: false,
           message: "Validation failed",
-          errors: Object.values(error.errors).map(
-            (item) => item.message
-          ),
+          errors: Object.values(error.errors).map((item) => item.message),
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    /*
-     * Handle duplicate key errors
-     */
     if (error?.code === 11000) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "A destination with this slug already exists",
+          message: "A destination with this slug already exists",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -316,7 +340,7 @@ export async function POST(request) {
         success: false,
         message: "Failed to create destination",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

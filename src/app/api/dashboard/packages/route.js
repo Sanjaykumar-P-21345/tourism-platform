@@ -1,50 +1,94 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
+
 import connectDB from "@/utils/mongodb";
 import { Destination, Package, Place } from "@/utils/schema";
 import { requireAdmin } from "@/utils/adminAuth";
 
+const ALLOWED_PRICE_TYPES = ["per-person", "per-couple", "per-group"];
+
+function parseBoolean(value, defaultValue = false) {
+  if (value === undefined || value === null) {
+    return defaultValue;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (normalized === "true") {
+      return true;
+    }
+
+    if (normalized === "false") {
+      return false;
+    }
+  }
+
+  return Boolean(value);
+}
+
 function normalizeImage(image) {
-  if (!image) return null;
-
-  if (typeof image === "string") {
-    return {
-      url: image.trim(),
-      publicId: "",
-    };
+  if (!image || typeof image !== "object") {
+    return null;
   }
 
-  if (typeof image === "object" && image.url) {
-    return {
-      url: String(image.url).trim(),
-      publicId: String(image.publicId || "").trim(),
-    };
+  const url = String(image.url || "").trim();
+  const publicId = String(image.publicId || "").trim();
+
+  if (!url || !publicId) {
+    return null;
   }
 
-  return null;
+  return {
+    url,
+    publicId,
+  };
 }
 
 function normalizeGallery(gallery) {
-  if (!Array.isArray(gallery)) return [];
+  if (!Array.isArray(gallery)) {
+    return [];
+  }
 
-  return gallery.map(normalizeImage).filter((image) => image?.url);
+  return gallery.map(normalizeImage).filter(Boolean);
 }
 
 function normalizeStringArray(value) {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) {
+    return [];
+  }
 
-  return value.map((item) => String(item).trim()).filter(Boolean);
+  return value.map((item) => String(item || "").trim()).filter(Boolean);
 }
 
-async function validateItinerary(itinerary) {
-  if (!Array.isArray(itinerary)) {
+function normalizeSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+async function validateItinerary(itinerary, destinationId) {
+  if (itinerary === undefined || itinerary === null) {
     return {
       valid: true,
       itinerary: [],
     };
   }
 
+  if (!Array.isArray(itinerary)) {
+    return {
+      valid: false,
+      message: "Itinerary must be an array",
+    };
+  }
+
   const normalized = [];
+  const usedDays = new Set();
+  const allPlaceIds = new Set();
 
   for (let index = 0; index < itinerary.length; index += 1) {
     const item = itinerary[index];
@@ -65,6 +109,15 @@ async function validateItinerary(itinerary) {
       };
     }
 
+    if (usedDays.has(day)) {
+      return {
+        valid: false,
+        message: `Duplicate itinerary day: Day ${day}`,
+      };
+    }
+
+    usedDays.add(day);
+
     const title = String(item.title || "").trim();
 
     if (!title) {
@@ -74,9 +127,13 @@ async function validateItinerary(itinerary) {
       };
     }
 
-    const places = Array.isArray(item.places) ? item.places : [];
+    const description = String(item.description || "").trim();
 
-    for (const placeId of places) {
+    const rawPlaces = Array.isArray(item.places) ? item.places : [];
+
+    const places = [];
+
+    for (const placeId of rawPlaces) {
       if (!mongoose.Types.ObjectId.isValid(placeId)) {
         return {
           valid: false,
@@ -84,30 +141,71 @@ async function validateItinerary(itinerary) {
         };
       }
 
-      const placeExists = await Place.exists({
-        _id: placeId,
-      });
+      const normalizedPlaceId = String(placeId);
 
-      if (!placeExists) {
-        return {
-          valid: false,
-          message: `Place not found: ${placeId}`,
-        };
+      if (!allPlaceIds.has(normalizedPlaceId)) {
+        allPlaceIds.add(normalizedPlaceId);
+        places.push(normalizedPlaceId);
       }
     }
 
     normalized.push({
       day,
       title,
-      description: String(item.description || "").trim(),
+      description,
       places,
     });
   }
+
+  if (allPlaceIds.size > 0) {
+    const placeIds = Array.from(allPlaceIds);
+
+    const places = await Place.find({
+      _id: {
+        $in: placeIds,
+      },
+    })
+      .select("_id destination")
+      .lean();
+
+    if (places.length !== placeIds.length) {
+      const existingIds = new Set(places.map((place) => String(place._id)));
+
+      const missingPlaceId = placeIds.find(
+        (placeId) => !existingIds.has(placeId),
+      );
+
+      return {
+        valid: false,
+        message: `Place not found: ${missingPlaceId}`,
+      };
+    }
+
+    const invalidDestinationPlace = places.find(
+      (place) => String(place.destination) !== String(destinationId),
+    );
+
+    if (invalidDestinationPlace) {
+      return {
+        valid: false,
+        message: "All itinerary places must belong to the selected destination",
+      };
+    }
+  }
+
+  normalized.sort((a, b) => a.day - b.day);
 
   return {
     valid: true,
     itinerary: normalized,
   };
+}
+
+async function populatePackage(packageId) {
+  return Package.findById(packageId)
+    .populate("destination", "name slug")
+    .populate("itinerary.places", "name slug category")
+    .lean();
 }
 
 export async function GET(request) {
@@ -167,6 +265,16 @@ export async function POST(request) {
 
     const body = await request.json();
 
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid request body",
+        },
+        { status: 400 },
+      );
+    }
+
     const {
       destination,
       name,
@@ -185,6 +293,9 @@ export async function POST(request) {
       isActive,
     } = body;
 
+    /*
+     * Required fields
+     */
     if (
       !destination ||
       !name ||
@@ -205,6 +316,9 @@ export async function POST(request) {
       );
     }
 
+    /*
+     * Destination validation
+     */
     if (!mongoose.Types.ObjectId.isValid(destination)) {
       return NextResponse.json(
         {
@@ -229,9 +343,16 @@ export async function POST(request) {
       );
     }
 
+    /*
+     * Basic string normalization
+     */
     const normalizedName = String(name).trim();
-    const normalizedSlug = String(slug).trim().toLowerCase();
+
+    const normalizedSlug = normalizeSlug(slug);
+
     const normalizedDescription = String(description).trim();
+
+    const normalizedShortDescription = String(shortDescription || "").trim();
 
     if (!normalizedName) {
       return NextResponse.json(
@@ -263,9 +384,12 @@ export async function POST(request) {
       );
     }
 
+    /*
+     * Price validation
+     */
     const numericPrice = Number(price);
 
-    if (Number.isNaN(numericPrice) || numericPrice < 0) {
+    if (!Number.isFinite(numericPrice) || numericPrice < 0) {
       return NextResponse.json(
         {
           success: false,
@@ -275,8 +399,12 @@ export async function POST(request) {
       );
     }
 
+    /*
+     * Duration validation
+     */
     if (
       !duration ||
+      typeof duration !== "object" ||
       duration.days === undefined ||
       duration.nights === undefined
     ) {
@@ -307,11 +435,12 @@ export async function POST(request) {
       );
     }
 
-    const allowedPriceTypes = ["per-person", "per-couple", "per-group"];
+    /*
+     * Price type validation
+     */
+    const normalizedPriceType = String(priceType || "per-person").trim();
 
-    const normalizedPriceType = priceType || "per-person";
-
-    if (!allowedPriceTypes.includes(normalizedPriceType)) {
+    if (!ALLOWED_PRICE_TYPES.includes(normalizedPriceType)) {
       return NextResponse.json(
         {
           success: false,
@@ -321,21 +450,32 @@ export async function POST(request) {
       );
     }
 
+    /*
+     * Cover image validation
+     *
+     * ImageSchema requires both url and publicId.
+     */
     const normalizedCoverImage = normalizeImage(coverImage);
 
-    if (!normalizedCoverImage?.url) {
+    if (!normalizedCoverImage) {
       return NextResponse.json(
         {
           success: false,
-          message: "A valid cover image is required",
+          message: "A valid cover image with URL and public ID is required",
         },
         { status: 400 },
       );
     }
 
+    /*
+     * Gallery validation
+     */
     const normalizedGallery = normalizeGallery(gallery);
 
-    const existingPackage = await Package.findOne({
+    /*
+     * Slug uniqueness
+     */
+    const existingPackage = await Package.exists({
       slug: normalizedSlug,
     });
 
@@ -349,7 +489,10 @@ export async function POST(request) {
       );
     }
 
-    const itineraryValidation = await validateItinerary(itinerary);
+    /*
+     * Itinerary validation
+     */
+    const itineraryValidation = await validateItinerary(itinerary, destination);
 
     if (!itineraryValidation.valid) {
       return NextResponse.json(
@@ -361,11 +504,16 @@ export async function POST(request) {
       );
     }
 
-    const packageData = await Package.create({
+    /*
+     * Create package
+     */
+    const createdPackage = await Package.create({
       destination,
       name: normalizedName,
       slug: normalizedSlug,
-      shortDescription: String(shortDescription || "").trim(),
+
+      shortDescription: normalizedShortDescription,
+
       description: normalizedDescription,
 
       duration: {
@@ -387,10 +535,15 @@ export async function POST(request) {
 
       gallery: normalizedGallery,
 
-      isFeatured: Boolean(isFeatured),
+      isFeatured: parseBoolean(isFeatured, false),
 
-      isActive: isActive === undefined ? true : Boolean(isActive),
+      isActive: parseBoolean(isActive, true),
     });
+
+    /*
+     * Return populated package
+     */
+    const packageData = await populatePackage(createdPackage._id);
 
     return NextResponse.json(
       {

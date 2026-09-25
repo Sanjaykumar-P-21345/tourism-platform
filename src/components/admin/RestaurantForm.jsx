@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, X, Image as ImageIcon, Loader2, Plus } from "lucide-react";
+import {
+  Upload,
+  X,
+  Image as ImageIcon,
+  LoaderCircle,
+  Plus,
+} from "lucide-react";
 
 import { adminApi } from "@/utils/adminApi";
 import { getToken } from "@/utils/api";
@@ -41,16 +47,24 @@ function normalizeImage(image) {
   if (!image) return null;
 
   if (typeof image === "string") {
+    const url = image.trim();
+
+    if (!url) return null;
+
     return {
-      url: image,
+      url,
       publicId: "",
     };
   }
 
-  return {
-    url: image.url || "",
-    publicId: image.publicId || "",
-  };
+  if (typeof image === "object") {
+    return {
+      url: image.url || "",
+      publicId: image.publicId || "",
+    };
+  }
+
+  return null;
 }
 
 function normalizeFormData(data) {
@@ -98,8 +112,9 @@ function normalizeFormData(data) {
 function Field({ label, children, required = false, className = "" }) {
   return (
     <div className={className}>
-      <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">
+      <label className="mb-2 block text-sm font-semibold text-slate-700">
         {label}
+
         {required && <span className="ml-1 text-red-500">*</span>}
       </label>
 
@@ -109,32 +124,36 @@ function Field({ label, children, required = false, className = "" }) {
 }
 
 const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500";
+  "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50";
 
 export default function RestaurantForm({
   initialValues = null,
   destinations = [],
   mode = "create",
   readOnly = false,
-  onClose,
-  onSaved,
+  onCancel,
+  onSuccess,
 }) {
   const router = useRouter();
 
   const [form, setForm] = useState(emptyForm);
+
   const [loading, setLoading] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (initialValues) {
       setForm(normalizeFormData(initialValues));
+    } else {
+      setForm(emptyForm);
     }
-  }, [initialValues?._id]);
+  }, [initialValues]);
 
   function updateField(name, value) {
-    setForm((prev) => ({
-      ...prev,
+    setForm((previous) => ({
+      ...previous,
       [name]: value,
     }));
   }
@@ -149,10 +168,58 @@ export default function RestaurantForm({
   }
 
   function handleNameChange(value) {
-    updateField("name", value);
+    setForm((previous) => ({
+      ...previous,
+      name: value,
+      ...(mode === "create" ? { slug: generateSlug(value) } : {}),
+    }));
+  }
 
-    if (mode === "create") {
-      updateField("slug", generateSlug(value));
+  async function uploadCoverImage(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    setError("");
+
+    try {
+      const token = getToken();
+
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
+
+      const formData = new FormData();
+
+      formData.append("file", file);
+      formData.append("folder", "tourism/restaurants/cover");
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Cover image upload failed");
+      }
+
+      if (data?.image) {
+        setForm((previous) => ({
+          ...previous,
+          coverImage: data.image,
+        }));
+      }
+    } catch (uploadError) {
+      console.error(uploadError);
+
+      setError(uploadError?.message || "Cover image upload failed");
+    } finally {
+      event.target.value = "";
     }
   }
 
@@ -198,114 +265,36 @@ export default function RestaurantForm({
         }
       }
 
-      setForm((prev) => ({
-        ...prev,
-        gallery: [...prev.gallery, ...uploadedImages],
+      setForm((previous) => ({
+        ...previous,
+        gallery: [...previous.gallery, ...uploadedImages],
       }));
     } catch (uploadError) {
       console.error(uploadError);
-      setError(uploadError.message);
+
+      setError(uploadError?.message || "Gallery image upload failed");
     } finally {
       setUploadingGallery(false);
       event.target.value = "";
     }
   }
 
-  async function deleteCloudinaryImage(image) {
-    if (!image?.publicId) {
-      return true;
-    }
-
-    try {
-      const token = getToken();
-
-      const response = await fetch("/api/upload/delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          publicId: image.publicId,
-        }),
-      });
-
-      return response.ok;
-    } catch (deleteError) {
-      console.error(deleteError);
-      return false;
-    }
-  }
-
-  async function removeGalleryImage(index) {
+  function removeGalleryImage(index) {
     if (readOnly) return;
 
-    const image = form.gallery[index];
-
-    await deleteCloudinaryImage(image);
-
-    setForm((prev) => ({
-      ...prev,
-      gallery: prev.gallery.filter((_, imageIndex) => imageIndex !== index),
+    setForm((previous) => ({
+      ...previous,
+      gallery: previous.gallery.filter((_, imageIndex) => imageIndex !== index),
     }));
   }
 
-  async function removeCoverImage() {
-    if (readOnly || !form.coverImage) return;
+  function removeCoverImage() {
+    if (readOnly) return;
 
-    await deleteCloudinaryImage(form.coverImage);
-
-    setForm((prev) => ({
-      ...prev,
+    setForm((previous) => ({
+      ...previous,
       coverImage: null,
     }));
-  }
-
-  async function uploadCoverImage(event) {
-    const file = event.target.files?.[0];
-
-    if (!file) return;
-
-    setError("");
-
-    try {
-      const token = getToken();
-
-      if (!token) {
-        throw new Error("Authentication token not found");
-      }
-
-      const formData = new FormData();
-
-      formData.append("file", file);
-      formData.append("folder", "tourism/restaurants/cover");
-
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.message || "Cover image upload failed");
-      }
-
-      if (data?.image) {
-        setForm((prev) => ({
-          ...prev,
-          coverImage: data.image,
-        }));
-      }
-    } catch (uploadError) {
-      console.error(uploadError);
-      setError(uploadError.message);
-    } finally {
-      event.target.value = "";
-    }
   }
 
   async function handleSubmit(event) {
@@ -325,6 +314,11 @@ export default function RestaurantForm({
       return;
     }
 
+    if (!form.slug.trim()) {
+      setError("Restaurant slug is required.");
+      return;
+    }
+
     if (!form.description.trim()) {
       setError("Restaurant description is required.");
       return;
@@ -340,13 +334,28 @@ export default function RestaurantForm({
       return;
     }
 
-    setLoading(true);
+    const rating = Number(form.rating);
+
+    if (Number.isNaN(rating) || rating < 0 || rating > 5) {
+      setError("Rating must be between 0 and 5.");
+      return;
+    }
+
+    if (form.latitude !== "" && Number.isNaN(Number(form.latitude))) {
+      setError("Latitude must be a valid number.");
+      return;
+    }
+
+    if (form.longitude !== "" && Number.isNaN(Number(form.longitude))) {
+      setError("Longitude must be a valid number.");
+      return;
+    }
 
     const payload = {
       destination: form.destination,
 
       name: form.name.trim(),
-      slug: form.slug.trim(),
+      slug: generateSlug(form.slug),
 
       description: form.description.trim(),
 
@@ -356,7 +365,6 @@ export default function RestaurantForm({
         .filter(Boolean),
 
       foodType: form.foodType,
-
       priceRange: form.priceRange,
 
       popularDishes: form.popularDishes
@@ -364,12 +372,14 @@ export default function RestaurantForm({
         .map((item) => item.trim())
         .filter(Boolean),
 
-      openingTime: form.openingTime,
-      closingTime: form.closingTime,
+      openingTime: form.openingTime.trim(),
+      closingTime: form.closingTime.trim(),
 
       address: form.address.trim(),
-      latitude: form.latitude,
-      longitude: form.longitude,
+
+      latitude: form.latitude === "" ? undefined : Number(form.latitude),
+
+      longitude: form.longitude === "" ? undefined : Number(form.longitude),
 
       contactPhone: form.contactPhone.trim(),
       website: form.website.trim(),
@@ -377,13 +387,15 @@ export default function RestaurantForm({
       coverImage: form.coverImage,
       gallery: form.gallery,
 
-      rating: Number(form.rating) || 0,
+      rating,
 
-      isFeatured: form.isFeatured,
-      isActive: form.isActive,
+      isFeatured: Boolean(form.isFeatured),
+      isActive: Boolean(form.isActive),
     };
 
     try {
+      setLoading(true);
+
       let response;
 
       if (mode === "edit" && initialValues?._id) {
@@ -395,18 +407,15 @@ export default function RestaurantForm({
         response = await adminApi.post("/api/dashboard/restaurants", payload);
       }
 
-      if (onSaved) {
-        onSaved(response.data);
-      }
-
-      if (onClose) {
-        onClose();
+      if (onSuccess) {
+        await onSuccess(response?.data);
+        return;
       }
 
       router.push("/admin/dashboard/restaurants");
-      router.refresh();
     } catch (submitError) {
       console.error(submitError);
+
       setError(submitError?.message || "Failed to save restaurant");
     } finally {
       setLoading(false);
@@ -414,21 +423,22 @@ export default function RestaurantForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* ERROR */}
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {/* BASIC INFORMATION */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-        <div className="mb-6">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+      <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-5">
+          <h2 className="text-lg font-bold text-slate-900">
             Basic Information
           </h2>
 
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-sm text-slate-500">
             Enter the restaurant's main information.
           </p>
         </div>
@@ -437,7 +447,9 @@ export default function RestaurantForm({
           <Field label="Destination" required>
             <select
               value={form.destination}
-              onChange={(e) => updateField("destination", e.target.value)}
+              onChange={(event) =>
+                updateField("destination", event.target.value)
+              }
               disabled={readOnly}
               className={inputClass}
             >
@@ -454,7 +466,7 @@ export default function RestaurantForm({
           <Field label="Restaurant Name" required>
             <input
               value={form.name}
-              onChange={(e) => handleNameChange(e.target.value)}
+              onChange={(event) => handleNameChange(event.target.value)}
               disabled={readOnly}
               placeholder="Example: Spice Garden"
               className={inputClass}
@@ -464,8 +476,8 @@ export default function RestaurantForm({
           <Field label="Slug" required>
             <input
               value={form.slug}
-              onChange={(e) =>
-                updateField("slug", generateSlug(e.target.value))
+              onChange={(event) =>
+                updateField("slug", generateSlug(event.target.value))
               }
               disabled={readOnly}
               placeholder="spice-garden"
@@ -476,7 +488,7 @@ export default function RestaurantForm({
           <Field label="Food Type">
             <select
               value={form.foodType}
-              onChange={(e) => updateField("foodType", e.target.value)}
+              onChange={(event) => updateField("foodType", event.target.value)}
               disabled={readOnly}
               className={inputClass}
             >
@@ -489,7 +501,9 @@ export default function RestaurantForm({
           <Field label="Price Range" required>
             <select
               value={form.priceRange}
-              onChange={(e) => updateField("priceRange", e.target.value)}
+              onChange={(event) =>
+                updateField("priceRange", event.target.value)
+              }
               disabled={readOnly}
               className={inputClass}
             >
@@ -508,7 +522,7 @@ export default function RestaurantForm({
               max="5"
               step="0.1"
               value={form.rating}
-              onChange={(e) => updateField("rating", e.target.value)}
+              onChange={(event) => updateField("rating", event.target.value)}
               disabled={readOnly}
               className={inputClass}
             />
@@ -520,7 +534,9 @@ export default function RestaurantForm({
             <textarea
               rows={5}
               value={form.description}
-              onChange={(e) => updateField("description", e.target.value)}
+              onChange={(event) =>
+                updateField("description", event.target.value)
+              }
               disabled={readOnly}
               placeholder="Describe the restaurant..."
               className={inputClass}
@@ -529,9 +545,9 @@ export default function RestaurantForm({
         </div>
       </section>
 
-      {/* FOOD INFORMATION */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-        <h2 className="mb-6 text-lg font-bold text-slate-900 dark:text-white">
+      {/* FOOD */}
+      <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="mb-5 text-lg font-bold text-slate-900">
           Food Information
         </h2>
 
@@ -539,7 +555,7 @@ export default function RestaurantForm({
           <Field label="Cuisines">
             <input
               value={form.cuisines}
-              onChange={(e) => updateField("cuisines", e.target.value)}
+              onChange={(event) => updateField("cuisines", event.target.value)}
               disabled={readOnly}
               placeholder="Indian, Chinese, Italian"
               className={inputClass}
@@ -553,7 +569,9 @@ export default function RestaurantForm({
           <Field label="Popular Dishes">
             <input
               value={form.popularDishes}
-              onChange={(e) => updateField("popularDishes", e.target.value)}
+              onChange={(event) =>
+                updateField("popularDishes", event.target.value)
+              }
               disabled={readOnly}
               placeholder="Biryani, Dosa, Pasta"
               className={inputClass}
@@ -567,8 +585,8 @@ export default function RestaurantForm({
       </section>
 
       {/* TIMING & CONTACT */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-        <h2 className="mb-6 text-lg font-bold text-slate-900 dark:text-white">
+      <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="mb-5 text-lg font-bold text-slate-900">
           Timing & Contact
         </h2>
 
@@ -577,7 +595,9 @@ export default function RestaurantForm({
             <input
               type="time"
               value={form.openingTime}
-              onChange={(e) => updateField("openingTime", e.target.value)}
+              onChange={(event) =>
+                updateField("openingTime", event.target.value)
+              }
               disabled={readOnly}
               className={inputClass}
             />
@@ -587,7 +607,9 @@ export default function RestaurantForm({
             <input
               type="time"
               value={form.closingTime}
-              onChange={(e) => updateField("closingTime", e.target.value)}
+              onChange={(event) =>
+                updateField("closingTime", event.target.value)
+              }
               disabled={readOnly}
               className={inputClass}
             />
@@ -596,7 +618,9 @@ export default function RestaurantForm({
           <Field label="Contact Phone">
             <input
               value={form.contactPhone}
-              onChange={(e) => updateField("contactPhone", e.target.value)}
+              onChange={(event) =>
+                updateField("contactPhone", event.target.value)
+              }
               disabled={readOnly}
               placeholder="+91 98765 43210"
               className={inputClass}
@@ -606,7 +630,7 @@ export default function RestaurantForm({
           <Field label="Website">
             <input
               value={form.website}
-              onChange={(e) => updateField("website", e.target.value)}
+              onChange={(event) => updateField("website", event.target.value)}
               disabled={readOnly}
               placeholder="https://example.com"
               className={inputClass}
@@ -619,7 +643,7 @@ export default function RestaurantForm({
             <textarea
               rows={3}
               value={form.address}
-              onChange={(e) => updateField("address", e.target.value)}
+              onChange={(event) => updateField("address", event.target.value)}
               disabled={readOnly}
               placeholder="Restaurant address"
               className={inputClass}
@@ -629,10 +653,8 @@ export default function RestaurantForm({
       </section>
 
       {/* LOCATION */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-        <h2 className="mb-6 text-lg font-bold text-slate-900 dark:text-white">
-          Location
-        </h2>
+      <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="mb-5 text-lg font-bold text-slate-900">Location</h2>
 
         <div className="grid gap-5 md:grid-cols-2">
           <Field label="Latitude">
@@ -640,7 +662,7 @@ export default function RestaurantForm({
               type="number"
               step="any"
               value={form.latitude}
-              onChange={(e) => updateField("latitude", e.target.value)}
+              onChange={(event) => updateField("latitude", event.target.value)}
               disabled={readOnly}
               placeholder="13.0827"
               className={inputClass}
@@ -652,7 +674,7 @@ export default function RestaurantForm({
               type="number"
               step="any"
               value={form.longitude}
-              onChange={(e) => updateField("longitude", e.target.value)}
+              onChange={(event) => updateField("longitude", event.target.value)}
               disabled={readOnly}
               placeholder="80.2707"
               className={inputClass}
@@ -662,14 +684,14 @@ export default function RestaurantForm({
       </section>
 
       {/* IMAGES */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-        <div className="mb-6">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+      <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-5">
+          <h2 className="text-lg font-bold text-slate-900">
             Restaurant Images
           </h2>
 
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Upload images directly. Images are stored in Cloudinary.
+          <p className="mt-1 text-sm text-slate-500">
+            Upload images directly to Cloudinary.
           </p>
         </div>
 
@@ -677,10 +699,10 @@ export default function RestaurantForm({
         <Field label="Cover Image" required>
           {!form.coverImage ? (
             !readOnly && (
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 transition hover:border-blue-400 hover:bg-blue-50/50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
-                <Upload className="mb-3 h-9 w-9 text-slate-400" />
+              <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 px-6 py-10 transition hover:border-emerald-400 hover:bg-emerald-50">
+                <Upload className="mb-3 h-9 w-9 text-emerald-500" />
 
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <span className="text-sm font-semibold text-slate-700">
                   Upload cover image
                 </span>
 
@@ -697,7 +719,7 @@ export default function RestaurantForm({
               </label>
             )
           ) : (
-            <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="relative overflow-hidden rounded-2xl border border-emerald-100">
               <img
                 src={form.coverImage.url}
                 alt="Restaurant cover"
@@ -708,9 +730,9 @@ export default function RestaurantForm({
                 <button
                   type="button"
                   onClick={removeCoverImage}
-                  className="absolute right-3 top-3 rounded-full bg-red-500 p-2 text-white shadow-lg transition hover:bg-red-600"
+                  className="absolute right-3 top-3 rounded-full bg-red-500 p-2 text-white shadow-lg hover:bg-red-600"
                 >
-                  <X className="h-4 w-4" />
+                  <X size={16} />
                 </button>
               )}
             </div>
@@ -719,9 +741,9 @@ export default function RestaurantForm({
 
         {/* GALLERY */}
         <div className="mt-7">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <h3 className="text-sm font-semibold text-slate-700">
                 Gallery Images
               </h3>
 
@@ -731,11 +753,11 @@ export default function RestaurantForm({
             </div>
 
             {!readOnly && (
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700">
                 {uploadingGallery ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <LoaderCircle size={15} className="animate-spin" />
                 ) : (
-                  <Plus className="h-4 w-4" />
+                  <Plus size={15} />
                 )}
 
                 {uploadingGallery ? "Uploading..." : "Add Images"}
@@ -753,10 +775,10 @@ export default function RestaurantForm({
           </div>
 
           {form.gallery.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-10 text-center dark:border-slate-700">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
               <ImageIcon className="mx-auto mb-2 h-8 w-8 text-slate-400" />
 
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-500">
                 No gallery images uploaded.
               </p>
             </div>
@@ -765,7 +787,7 @@ export default function RestaurantForm({
               {form.gallery.map((image, index) => (
                 <div
                   key={`${image.url}-${index}`}
-                  className="group relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700"
+                  className="group relative overflow-hidden rounded-xl border border-slate-200"
                 >
                   <img
                     src={image.url}
@@ -779,7 +801,7 @@ export default function RestaurantForm({
                       onClick={() => removeGalleryImage(index)}
                       className="absolute right-2 top-2 rounded-full bg-red-500 p-1.5 text-white opacity-0 shadow-lg transition group-hover:opacity-100"
                     >
-                      <X className="h-4 w-4" />
+                      <X size={14} />
                     </button>
                   )}
                 </div>
@@ -790,22 +812,22 @@ export default function RestaurantForm({
       </section>
 
       {/* SETTINGS */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-        <h2 className="mb-5 text-lg font-bold text-slate-900 dark:text-white">
-          Settings
-        </h2>
+      <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="mb-5 text-lg font-bold text-slate-900">Settings</h2>
 
         <div className="space-y-4">
           <label className="flex cursor-pointer items-center gap-3">
             <input
               type="checkbox"
               checked={form.isFeatured}
-              onChange={(e) => updateField("isFeatured", e.target.checked)}
+              onChange={(event) =>
+                updateField("isFeatured", event.target.checked)
+              }
               disabled={readOnly}
-              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
             />
 
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            <span className="text-sm font-medium text-slate-700">
               Featured restaurant
             </span>
           </label>
@@ -814,12 +836,14 @@ export default function RestaurantForm({
             <input
               type="checkbox"
               checked={form.isActive}
-              onChange={(e) => updateField("isActive", e.target.checked)}
+              onChange={(event) =>
+                updateField("isActive", event.target.checked)
+              }
               disabled={readOnly}
-              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
             />
 
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            <span className="text-sm font-medium text-slate-700">
               Active restaurant
             </span>
           </label>
@@ -828,17 +852,17 @@ export default function RestaurantForm({
 
       {/* ACTIONS */}
       {!readOnly && (
-        <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-6 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-3 border-t border-emerald-100 pt-5">
           <button
             type="button"
             onClick={() => {
-              if (onClose) {
-                onClose();
+              if (onCancel) {
+                onCancel();
               } else {
                 router.push("/admin/dashboard/restaurants");
               }
             }}
-            className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             Cancel
           </button>
@@ -846,9 +870,9 @@ export default function RestaurantForm({
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {loading && <LoaderCircle size={16} className="animate-spin" />}
 
             {mode === "edit" ? "Save Changes" : "Create Restaurant"}
           </button>

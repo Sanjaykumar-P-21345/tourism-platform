@@ -1,31 +1,28 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
+
 import connectDB from "@/utils/mongodb";
-import {
-  Destination,
-  Hotel,
-} from "@/utils/schema";
+import { Destination, Hotel } from "@/utils/schema";
 import { requireAdmin } from "@/utils/adminAuth";
 
 function normalizeImage(image) {
   if (!image) return null;
 
   if (typeof image === "string") {
+    const url = image.trim();
+
+    if (!url) return null;
+
     return {
-      url: image.trim(),
+      url,
       publicId: "",
     };
   }
 
-  if (
-    typeof image === "object" &&
-    image.url
-  ) {
+  if (typeof image === "object" && image.url) {
     return {
       url: String(image.url).trim(),
-      publicId: String(
-        image.publicId || ""
-      ).trim(),
+      publicId: String(image.publicId || "").trim(),
     };
   }
 
@@ -37,10 +34,12 @@ function normalizeGallery(gallery) {
     return [];
   }
 
-  return gallery
-    .map(normalizeImage)
-    .filter(Boolean);
+  return gallery.map(normalizeImage).filter(Boolean);
 }
+
+/* ================================================================
+   GET ALL HOTELS
+================================================================ */
 
 export async function GET(request) {
   try {
@@ -52,17 +51,14 @@ export async function GET(request) {
           success: false,
           message: "Unauthorized",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     await connectDB();
 
     const hotels = await Hotel.find({})
-      .populate(
-        "destination",
-        "name slug"
-      )
+      .populate("destination", "name slug")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -71,20 +67,21 @@ export async function GET(request) {
       data: hotels,
     });
   } catch (error) {
-    console.error(
-      "GET hotels error:",
-      error
-    );
+    console.error("GET hotels error:", error);
 
     return NextResponse.json(
       {
         success: false,
         message: "Failed to fetch hotels",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
+
+/* ================================================================
+   CREATE HOTEL
+================================================================ */
 
 export async function POST(request) {
   try {
@@ -96,7 +93,7 @@ export async function POST(request) {
           success: false,
           message: "Unauthorized",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -124,6 +121,10 @@ export async function POST(request) {
       isActive,
     } = body;
 
+    /* ------------------------------------------------------------
+       REQUIRED FIELDS
+    ------------------------------------------------------------ */
+
     if (
       !destination ||
       !name ||
@@ -139,97 +140,101 @@ export async function POST(request) {
           message:
             "Destination, name, slug, description, category, price and cover image are required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        destination
-      )
-    ) {
+    /* ------------------------------------------------------------
+       DESTINATION
+    ------------------------------------------------------------ */
+
+    if (!mongoose.Types.ObjectId.isValid(destination)) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Invalid destination ID",
+          message: "Invalid destination ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const destinationExists =
-      await Destination.exists({
-        _id: destination,
-      });
+    const destinationExists = await Destination.exists({
+      _id: destination,
+    });
 
     if (!destinationExists) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Destination not found",
+          message: "Destination not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    const normalizedCoverImage =
-      normalizeImage(coverImage);
+    /* ------------------------------------------------------------
+       IMAGES
+    ------------------------------------------------------------ */
+
+    const normalizedCoverImage = normalizeImage(coverImage);
 
     if (!normalizedCoverImage?.url) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Valid cover image is required",
+          message: "Valid cover image is required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const normalizedGallery =
-      normalizeGallery(gallery);
+    const normalizedGallery = normalizeGallery(gallery);
 
-    const normalizedSlug = String(slug)
-      .trim()
-      .toLowerCase();
+    /* ------------------------------------------------------------
+       SLUG
+    ------------------------------------------------------------ */
 
-    const existingHotel =
-      await Hotel.findOne({
-        slug: normalizedSlug,
-      });
+    const normalizedSlug = String(slug).trim().toLowerCase();
+
+    if (!normalizedSlug) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Hotel slug is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const existingHotel = await Hotel.findOne({
+      slug: normalizedSlug,
+    });
 
     if (existingHotel) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Hotel slug already exists",
+          message: "Hotel slug already exists",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
-    const minPrice = Number(
-      pricePerNight?.min
-    );
+    /* ------------------------------------------------------------
+       PRICE
+    ------------------------------------------------------------ */
 
-    const maxPrice = Number(
-      pricePerNight?.max
-    );
+    const minPrice = Number(pricePerNight?.min);
 
-    if (
-      Number.isNaN(minPrice) ||
-      Number.isNaN(maxPrice)
-    ) {
+    const maxPrice = Number(pricePerNight?.max);
+
+    if (Number.isNaN(minPrice) || Number.isNaN(maxPrice)) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Invalid price values",
+          message: "Invalid price values",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -237,10 +242,9 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Price cannot be negative",
+          message: "Price cannot be negative",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -248,17 +252,18 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Minimum price cannot be greater than maximum price",
+          message: "Minimum price cannot be greater than maximum price",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
+    /* ------------------------------------------------------------
+       RATING
+    ------------------------------------------------------------ */
+
     const normalizedRating =
-      rating === undefined ||
-      rating === null ||
-      rating === ""
+      rating === undefined || rating === null || rating === ""
         ? 0
         : Number(rating);
 
@@ -270,12 +275,15 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Rating must be between 0 and 5",
+          message: "Rating must be between 0 and 5",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
+
+    /* ------------------------------------------------------------
+       CREATE
+    ------------------------------------------------------------ */
 
     const hotel = await Hotel.create({
       destination,
@@ -284,8 +292,7 @@ export async function POST(request) {
 
       slug: normalizedSlug,
 
-      description:
-        String(description).trim(),
+      description: String(description).trim(),
 
       category,
 
@@ -295,78 +302,63 @@ export async function POST(request) {
       },
 
       amenities: Array.isArray(amenities)
-        ? amenities
-            .map((item) =>
-              String(item).trim()
-            )
-            .filter(Boolean)
+        ? amenities.map((item) => String(item).trim()).filter(Boolean)
         : [],
 
-      address: address
-        ? String(address).trim()
-        : undefined,
+      address: address ? String(address).trim() : undefined,
 
-      latitude,
+      latitude:
+        latitude !== undefined && latitude !== ""
+          ? Number(latitude)
+          : undefined,
 
-      longitude,
+      longitude:
+        longitude !== undefined && longitude !== ""
+          ? Number(longitude)
+          : undefined,
 
-      contactPhone: contactPhone
-        ? String(contactPhone).trim()
-        : undefined,
+      contactPhone: contactPhone ? String(contactPhone).trim() : undefined,
 
-      website: website
-        ? String(website).trim()
-        : undefined,
+      website: website ? String(website).trim() : undefined,
 
-      coverImage:
-        normalizedCoverImage,
+      coverImage: normalizedCoverImage,
 
-      gallery:
-        normalizedGallery,
+      gallery: normalizedGallery,
 
-      rating:
-        normalizedRating,
+      rating: normalizedRating,
 
-      isFeatured:
-        isFeatured ?? false,
+      isFeatured: Boolean(isFeatured),
 
-      isActive:
-        isActive ?? true,
+      isActive: isActive === undefined ? true : Boolean(isActive),
     });
 
     return NextResponse.json(
       {
         success: true,
-        message:
-          "Hotel created successfully",
+        message: "Hotel created successfully",
         data: hotel,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
-    console.error(
-      "POST hotel error:",
-      error
-    );
+    console.error("POST hotel error:", error);
 
     if (error?.code === 11000) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Hotel slug already exists",
+          message: "Hotel slug already exists",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Failed to create hotel",
+        message: "Failed to create hotel",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

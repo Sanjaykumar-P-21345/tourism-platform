@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminHeader from "@/components/admin/AdminHeader";
 
@@ -9,16 +8,22 @@ export default function AdminLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="min-h-screen w-full bg-[#f5f8f6]">
+      {/* Sidebar */}
       <AdminSidebar
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
       />
 
-      <div className="min-h-screen lg:ml-64">
-        <AdminHeader onMenuClick={() => setSidebarOpen(true)} />
+      {/* Main application area */}
+      <div className="min-h-screen w-full lg:pl-[270px]">
+        {/* Header */}
+        <AdminHeader
+          onMenuClick={() => setSidebarOpen(true)}
+        />
 
-        <main className="min-h-[calc(100vh-4rem)]">
+        {/* Page content */}
+        <main className="m-0 min-h-[calc(100vh-64px)] w-full bg-[#f5f8f6] p-0">
           {children}
         </main>
       </div>

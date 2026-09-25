@@ -29,6 +29,7 @@ export function getUser() {
     return JSON.parse(user);
   } catch (error) {
     console.error("Failed to parse stored user:", error);
+
     return null;
   }
 }
@@ -61,6 +62,7 @@ export function clearAuthData() {
   }
 
   sessionStorage.removeItem("token");
+
   sessionStorage.removeItem("user");
 }
 
@@ -74,11 +76,13 @@ export async function apiRequest(url, options = {}) {
   const headers = new Headers(options.headers || {});
 
   /* -------------------------------------------------------
-     JSON CONTENT TYPE
+     CONTENT TYPE
      ------------------------------------------------------- */
 
   if (
-    options.body &&
+    options.body !== undefined &&
+    options.body !== null &&
+    !(options.body instanceof FormData) &&
     !headers.has("Content-Type")
   ) {
     headers.set("Content-Type", "application/json");
@@ -89,96 +93,113 @@ export async function apiRequest(url, options = {}) {
      ------------------------------------------------------- */
 
   if (token) {
-    headers.set(
-      "Authorization",
-      `Bearer ${token}`,
-    );
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
+  let response;
+
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       ...options,
       headers,
     });
-
-    /* -----------------------------------------------------
-       PARSE RESPONSE
-       ----------------------------------------------------- */
-
-    let data = null;
-
-    const contentType =
-      response.headers.get("content-type");
-
-    if (
-      contentType &&
-      contentType.includes("application/json")
-    ) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
-
-      data = text
-        ? { message: text }
-        : null;
-    }
-
-    /* -----------------------------------------------------
-       UNAUTHORIZED
-       ----------------------------------------------------- */
-
-    if (response.status === 401) {
-      clearAuthData();
-    }
-
-    /* -----------------------------------------------------
-       API ERROR
-       ----------------------------------------------------- */
-
-    if (!response.ok) {
-      const error = new Error(
-        data?.message ||
-          `Request failed with status ${response.status}`,
-      );
-
-      error.status = response.status;
-      error.data = data;
-
-      throw error;
-    }
-
-    /* -----------------------------------------------------
-       SUCCESS
-       ----------------------------------------------------- */
-
-    return data;
   } catch (error) {
-    /*
-      Authentication errors are handled by the UI.
-    */
+    console.error("Network error:", error);
 
-    if (
-      error?.status !== 401 &&
-      error?.status !== 403
-    ) {
-      console.error(
-        "API request failed:",
-        error,
-      );
+    const networkError = new Error("Unable to connect to the server.");
+
+    networkError.status = 0;
+    networkError.data = null;
+
+    throw networkError;
+  }
+
+  /* -------------------------------------------------------
+     READ RESPONSE
+     ------------------------------------------------------- */
+
+  const contentType = response.headers.get("content-type") || "";
+
+  let data = null;
+  let rawText = "";
+
+  try {
+    rawText = await response.text();
+  } catch (error) {
+    console.error("Could not read server response:", error);
+  }
+
+  /* -------------------------------------------------------
+     PARSE JSON
+     ------------------------------------------------------- */
+
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText);
+    } catch (error) {
+      data = {
+        message: rawText,
+      };
+    }
+  }
+
+  /* -------------------------------------------------------
+     UNAUTHORIZED
+     ------------------------------------------------------- */
+
+  if (response.status === 401) {
+    clearAuthData();
+  }
+
+  /* -------------------------------------------------------
+     API ERROR
+     ------------------------------------------------------- */
+
+  if (!response.ok) {
+    const message =
+      data?.message ||
+      data?.error?.message ||
+      rawText ||
+      `Request failed with status ${response.status}`;
+
+    const error = new Error(message);
+
+    error.status = response.status;
+
+    error.data = data || {
+      raw: rawText,
+    };
+
+    if (process.env.NODE_ENV === "development") {
+      console.error(`API ${response.status} error:`, {
+        url,
+        method: options.method || "GET",
+
+        status: response.status,
+
+        contentType,
+
+        data,
+
+        rawText,
+      });
     }
 
     throw error;
   }
+
+  /* -------------------------------------------------------
+     SUCCESS
+     ------------------------------------------------------- */
+
+  return data;
 }
 
 /* =========================================================
-   GET REQUEST
+   GET
    ========================================================= */
 
-export async function apiGet(
-  url,
-  options = {},
-) {
+export async function apiGet(url, options = {}) {
   return apiRequest(url, {
     ...options,
     method: "GET",
@@ -186,70 +207,46 @@ export async function apiGet(
 }
 
 /* =========================================================
-   POST REQUEST
+   POST
    ========================================================= */
 
-export async function apiPost(
-  url,
-  body,
-  options = {},
-) {
+export async function apiPost(url, body, options = {}) {
   return apiRequest(url, {
     ...options,
     method: "POST",
-    body:
-      body !== undefined
-        ? JSON.stringify(body)
-        : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
 
 /* =========================================================
-   PUT REQUEST
+   PUT
    ========================================================= */
 
-export async function apiPut(
-  url,
-  body,
-  options = {},
-) {
+export async function apiPut(url, body, options = {}) {
   return apiRequest(url, {
     ...options,
     method: "PUT",
-    body:
-      body !== undefined
-        ? JSON.stringify(body)
-        : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
 
 /* =========================================================
-   PATCH REQUEST
+   PATCH
    ========================================================= */
 
-export async function apiPatch(
-  url,
-  body,
-  options = {},
-) {
+export async function apiPatch(url, body, options = {}) {
   return apiRequest(url, {
     ...options,
     method: "PATCH",
-    body:
-      body !== undefined
-        ? JSON.stringify(body)
-        : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
 
 /* =========================================================
-   DELETE REQUEST
+   DELETE
    ========================================================= */
 
-export async function apiDelete(
-  url,
-  options = {},
-) {
+export async function apiDelete(url, options = {}) {
   return apiRequest(url, {
     ...options,
     method: "DELETE",

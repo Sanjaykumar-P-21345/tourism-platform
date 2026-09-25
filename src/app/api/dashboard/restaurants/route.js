@@ -1,39 +1,74 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
+
 import connectDB from "@/utils/mongodb";
 import { Destination, Restaurant } from "@/utils/schema";
 import { requireAdmin } from "@/utils/adminAuth";
 
+/* ================================================================
+   HELPERS
+================================================================ */
+
 function normalizeImage(image) {
-  if (!image) return null;
-
-  // Support old URL-string data
-  if (typeof image === "string") {
-    const url = image.trim();
-
-    if (!url) return null;
-
-    return {
-      url,
-      publicId: "",
-    };
+  if (!image || typeof image !== "object") {
+    return null;
   }
 
-  if (typeof image === "object" && image.url) {
-    return {
-      url: String(image.url).trim(),
-      publicId: String(image.publicId || "").trim(),
-    };
+  const url = String(image.url || "").trim();
+  const publicId = String(image.publicId || "").trim();
+
+  if (!url || !publicId) {
+    return null;
   }
 
-  return null;
+  return {
+    url,
+    publicId,
+  };
 }
 
 function normalizeGallery(gallery) {
-  if (!Array.isArray(gallery)) return [];
+  if (!Array.isArray(gallery)) {
+    return [];
+  }
 
   return gallery.map(normalizeImage).filter(Boolean);
 }
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function parseOptionalCoordinate(value, fieldName) {
+  if (value === undefined || value === null || value === "") {
+    return {
+      value: undefined,
+      error: null,
+    };
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return {
+      value: undefined,
+      error: `${fieldName} must be a valid number`,
+    };
+  }
+
+  return {
+    value: number,
+    error: null,
+  };
+}
+
+/* ================================================================
+   GET ALL RESTAURANTS
+================================================================ */
 
 export async function GET(request) {
   try {
@@ -72,6 +107,10 @@ export async function GET(request) {
     );
   }
 }
+
+/* ================================================================
+   CREATE RESTAURANT
+================================================================ */
 
 export async function POST(request) {
   try {
@@ -114,23 +153,73 @@ export async function POST(request) {
       isActive,
     } = body;
 
-    if (
-      !destination ||
-      !name?.trim() ||
-      !slug?.trim() ||
-      !description?.trim() ||
-      !priceRange ||
-      !coverImage
-    ) {
+    /* ------------------------------------------------------------
+       REQUIRED FIELDS
+    ------------------------------------------------------------ */
+
+    if (!destination) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Destination, name, slug, description, price range and cover image are required",
+          message: "Destination is required",
         },
         { status: 400 },
       );
     }
+
+    if (!name || !String(name).trim()) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Restaurant name is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!slug || !String(slug).trim()) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Restaurant slug is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!description || !String(description).trim()) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Restaurant description is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!priceRange) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Price range is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!coverImage) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Cover image is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    /* ------------------------------------------------------------
+       DESTINATION VALIDATION
+    ------------------------------------------------------------ */
 
     if (!mongoose.Types.ObjectId.isValid(destination)) {
       return NextResponse.json(
@@ -156,11 +245,57 @@ export async function POST(request) {
       );
     }
 
-    const normalizedSlug = slug.trim().toLowerCase();
+    /* ------------------------------------------------------------
+       NORMALIZE BASIC VALUES
+    ------------------------------------------------------------ */
+
+    const normalizedName = String(name).trim();
+
+    const normalizedSlug = String(slug).trim().toLowerCase();
+
+    const normalizedDescription = String(description).trim();
+
+    /* ------------------------------------------------------------
+       PRICE RANGE VALIDATION
+    ------------------------------------------------------------ */
+
+    const allowedPriceRanges = ["budget", "moderate", "expensive"];
+
+    if (!allowedPriceRanges.includes(priceRange)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Price range must be budget, moderate or expensive",
+        },
+        { status: 400 },
+      );
+    }
+
+    /* ------------------------------------------------------------
+       FOOD TYPE VALIDATION
+    ------------------------------------------------------------ */
+
+    const normalizedFoodType = foodType || "both";
+
+    const allowedFoodTypes = ["veg", "non-veg", "both"];
+
+    if (!allowedFoodTypes.includes(normalizedFoodType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Food type must be veg, non-veg or both",
+        },
+        { status: 400 },
+      );
+    }
+
+    /* ------------------------------------------------------------
+       SLUG DUPLICATE CHECK
+    ------------------------------------------------------------ */
 
     const existingRestaurant = await Restaurant.findOne({
       slug: normalizedSlug,
-    });
+    }).lean();
 
     if (existingRestaurant) {
       return NextResponse.json(
@@ -172,17 +307,31 @@ export async function POST(request) {
       );
     }
 
+    /* ------------------------------------------------------------
+       COVER IMAGE
+    ------------------------------------------------------------ */
+
     const normalizedCoverImage = normalizeImage(coverImage);
 
-    if (!normalizedCoverImage?.url) {
+    if (!normalizedCoverImage) {
       return NextResponse.json(
         {
           success: false,
-          message: "Valid cover image is required",
+          message: "Valid cover image with Cloudinary publicId is required",
         },
         { status: 400 },
       );
     }
+
+    /* ------------------------------------------------------------
+       GALLERY
+    ------------------------------------------------------------ */
+
+    const normalizedGallery = normalizeGallery(gallery);
+
+    /* ------------------------------------------------------------
+       RATING
+    ------------------------------------------------------------ */
 
     const normalizedRating =
       rating === undefined || rating === null || rating === ""
@@ -190,7 +339,7 @@ export async function POST(request) {
         : Number(rating);
 
     if (
-      Number.isNaN(normalizedRating) ||
+      !Number.isFinite(normalizedRating) ||
       normalizedRating < 0 ||
       normalizedRating > 5
     ) {
@@ -203,43 +352,77 @@ export async function POST(request) {
       );
     }
 
+    /* ------------------------------------------------------------
+       COORDINATES
+    ------------------------------------------------------------ */
+
+    const latitudeResult = parseOptionalCoordinate(latitude, "Latitude");
+
+    if (latitudeResult.error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: latitudeResult.error,
+        },
+        { status: 400 },
+      );
+    }
+
+    const longitudeResult = parseOptionalCoordinate(longitude, "Longitude");
+
+    if (longitudeResult.error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: longitudeResult.error,
+        },
+        { status: 400 },
+      );
+    }
+
+    /* ------------------------------------------------------------
+       CREATE
+    ------------------------------------------------------------ */
+
     const restaurant = await Restaurant.create({
       destination,
-      name: name.trim(),
+
+      name: normalizedName,
+
       slug: normalizedSlug,
-      description: description.trim(),
 
-      cuisines: Array.isArray(cuisines)
-        ? cuisines.filter(Boolean).map((item) => String(item).trim())
-        : [],
+      description: normalizedDescription,
 
-      foodType: foodType || "both",
+      cuisines: normalizeStringArray(cuisines),
+
+      foodType: normalizedFoodType,
 
       priceRange,
 
-      popularDishes: Array.isArray(popularDishes)
-        ? popularDishes.filter(Boolean).map((item) => String(item).trim())
-        : [],
+      popularDishes: normalizeStringArray(popularDishes),
 
-      openingTime: openingTime?.trim() || "",
-      closingTime: closingTime?.trim() || "",
-      address: address?.trim() || "",
-      latitude:
-        latitude === "" || latitude === undefined
-          ? undefined
-          : Number(latitude),
-      longitude:
-        longitude === "" || longitude === undefined
-          ? undefined
-          : Number(longitude),
-      contactPhone: contactPhone?.trim() || "",
-      website: website?.trim() || "",
+      openingTime: openingTime ? String(openingTime).trim() : "",
+
+      closingTime: closingTime ? String(closingTime).trim() : "",
+
+      address: address ? String(address).trim() : "",
+
+      latitude: latitudeResult.value,
+
+      longitude: longitudeResult.value,
+
+      contactPhone: contactPhone ? String(contactPhone).trim() : "",
+
+      website: website ? String(website).trim() : "",
 
       coverImage: normalizedCoverImage,
-      gallery: normalizeGallery(gallery),
+
+      gallery: normalizedGallery,
 
       rating: normalizedRating,
+
       isFeatured: Boolean(isFeatured),
+
       isActive: isActive === undefined ? true : Boolean(isActive),
     });
 
@@ -254,10 +437,20 @@ export async function POST(request) {
   } catch (error) {
     console.error("POST restaurant error:", error);
 
+    if (error?.code === 11000) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Restaurant slug already exists",
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Failed to create restaurant",
+        message: error?.message || "Failed to create restaurant",
       },
       { status: 500 },
     );
