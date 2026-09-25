@@ -1,31 +1,37 @@
 /* =========================================================
    AUTH TOKEN
-   ========================================================= */
+========================================================= */
 
 export function getToken() {
   if (typeof window === "undefined") {
     return null;
   }
 
-  return sessionStorage.getItem("token");
+  try {
+    return sessionStorage.getItem("token");
+  } catch (error) {
+    console.error("Failed to get auth token:", error);
+
+    return null;
+  }
 }
 
 /* =========================================================
    AUTH USER
-   ========================================================= */
+========================================================= */
 
 export function getUser() {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const user = sessionStorage.getItem("user");
-
-  if (!user) {
-    return null;
-  }
-
   try {
+    const user = sessionStorage.getItem("user");
+
+    if (!user) {
+      return null;
+    }
+
     return JSON.parse(user);
   } catch (error) {
     console.error("Failed to parse stored user:", error);
@@ -36,39 +42,46 @@ export function getUser() {
 
 /* =========================================================
    SET AUTH DATA
-   ========================================================= */
+========================================================= */
 
-export function setAuthData(token, user) {
+export function setAuthData(token, user = null) {
   if (typeof window === "undefined") {
     return;
   }
 
-  if (token) {
-    sessionStorage.setItem("token", token);
-  }
+  try {
+    if (token) {
+      sessionStorage.setItem("token", token);
+    }
 
-  if (user) {
-    sessionStorage.setItem("user", JSON.stringify(user));
+    if (user) {
+      sessionStorage.setItem("user", JSON.stringify(user));
+    }
+  } catch (error) {
+    console.error("Failed to save authentication data:", error);
   }
 }
 
 /* =========================================================
    CLEAR AUTH DATA
-   ========================================================= */
+========================================================= */
 
 export function clearAuthData() {
   if (typeof window === "undefined") {
     return;
   }
 
-  sessionStorage.removeItem("token");
-
-  sessionStorage.removeItem("user");
+  try {
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
+  } catch (error) {
+    console.error("Failed to clear authentication data:", error);
+  }
 }
 
 /* =========================================================
    API REQUEST
-   ========================================================= */
+========================================================= */
 
 export async function apiRequest(url, options = {}) {
   const token = getToken();
@@ -77,7 +90,7 @@ export async function apiRequest(url, options = {}) {
 
   /* -------------------------------------------------------
      CONTENT TYPE
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   if (
     options.body !== undefined &&
@@ -89,14 +102,26 @@ export async function apiRequest(url, options = {}) {
   }
 
   /* -------------------------------------------------------
+     ACCEPT JSON
+  ------------------------------------------------------- */
+
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
+
+  /* -------------------------------------------------------
      AUTHORIZATION
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
   let response;
+
+  /* -------------------------------------------------------
+     FETCH
+  ------------------------------------------------------- */
 
   try {
     response = await fetch(url, {
@@ -110,13 +135,14 @@ export async function apiRequest(url, options = {}) {
 
     networkError.status = 0;
     networkError.data = null;
+    networkError.url = url;
 
     throw networkError;
   }
 
   /* -------------------------------------------------------
      READ RESPONSE
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   const contentType = response.headers.get("content-type") || "";
 
@@ -130,12 +156,26 @@ export async function apiRequest(url, options = {}) {
   }
 
   /* -------------------------------------------------------
-     PARSE JSON
-     ------------------------------------------------------- */
+     PARSE RESPONSE
+  ------------------------------------------------------- */
 
   if (rawText) {
     try {
-      data = JSON.parse(rawText);
+      if (contentType.includes("application/json")) {
+        data = JSON.parse(rawText);
+      } else {
+        /*
+         * Some APIs may return JSON without the correct
+         * content-type. Try parsing it anyway.
+         */
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = {
+            message: rawText,
+          };
+        }
+      }
     } catch (error) {
       data = {
         message: rawText,
@@ -145,24 +185,37 @@ export async function apiRequest(url, options = {}) {
 
   /* -------------------------------------------------------
      UNAUTHORIZED
-     ------------------------------------------------------- */
+     
+     IMPORTANT:
+     
+     Do NOT clear authentication data when the 401 comes
+     from the login endpoint.
+     
+     Login itself can legitimately return 401 when the
+     email/password is incorrect.
+  ------------------------------------------------------- */
 
-  if (response.status === 401) {
+  if (response.status === 401 && !url.includes("/api/admin/login")) {
     clearAuthData();
   }
 
   /* -------------------------------------------------------
      API ERROR
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   if (!response.ok) {
     const message =
       data?.message ||
       data?.error?.message ||
+      data?.error ||
       rawText ||
       `Request failed with status ${response.status}`;
 
     const error = new Error(message);
+
+    /* -----------------------------------------------------
+       ATTACH API INFORMATION
+    ----------------------------------------------------- */
 
     error.status = response.status;
 
@@ -170,17 +223,30 @@ export async function apiRequest(url, options = {}) {
       raw: rawText,
     };
 
-    if (process.env.NODE_ENV === "development") {
+    error.url = url;
+
+    error.method = options.method || "GET";
+
+    error.response = response;
+
+    /* -----------------------------------------------------
+       DEVELOPMENT LOGGING
+       
+       401 and 403 are handled by the UI and are not
+       unexpected server errors.
+    ----------------------------------------------------- */
+
+    if (
+      process.env.NODE_ENV === "development" &&
+      response.status !== 401 &&
+      response.status !== 403
+    ) {
       console.error(`API ${response.status} error:`, {
         url,
         method: options.method || "GET",
-
         status: response.status,
-
         contentType,
-
         data,
-
         rawText,
       });
     }
@@ -190,14 +256,14 @@ export async function apiRequest(url, options = {}) {
 
   /* -------------------------------------------------------
      SUCCESS
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   return data;
 }
 
 /* =========================================================
    GET
-   ========================================================= */
+========================================================= */
 
 export async function apiGet(url, options = {}) {
   return apiRequest(url, {
@@ -208,43 +274,49 @@ export async function apiGet(url, options = {}) {
 
 /* =========================================================
    POST
-   ========================================================= */
+========================================================= */
 
 export async function apiPost(url, body, options = {}) {
   return apiRequest(url, {
     ...options,
     method: "POST",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+
+    body:
+      body !== undefined && body !== null ? JSON.stringify(body) : undefined,
   });
 }
 
 /* =========================================================
    PUT
-   ========================================================= */
+========================================================= */
 
 export async function apiPut(url, body, options = {}) {
   return apiRequest(url, {
     ...options,
     method: "PUT",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+
+    body:
+      body !== undefined && body !== null ? JSON.stringify(body) : undefined,
   });
 }
 
 /* =========================================================
    PATCH
-   ========================================================= */
+========================================================= */
 
 export async function apiPatch(url, body, options = {}) {
   return apiRequest(url, {
     ...options,
     method: "PATCH",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+
+    body:
+      body !== undefined && body !== null ? JSON.stringify(body) : undefined,
   });
 }
 
 /* =========================================================
    DELETE
-   ========================================================= */
+========================================================= */
 
 export async function apiDelete(url, options = {}) {
   return apiRequest(url, {
@@ -255,7 +327,7 @@ export async function apiDelete(url, options = {}) {
 
 /* =========================================================
    LOGOUT
-   ========================================================= */
+========================================================= */
 
 export function logout() {
   clearAuthData();
