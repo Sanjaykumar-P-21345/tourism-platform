@@ -5,10 +5,11 @@ import {
   ArrowUpRight,
   Camera,
   Compass,
-  Globe,
+  Globe2,
   Mail,
   MapPin,
   Phone,
+  ShieldCheck,
   Video,
 } from "lucide-react";
 
@@ -20,139 +21,203 @@ const quickLinks = [
   { name: "Contact", href: "/contact" },
 ];
 
+const exploreItems = [
+  {
+    icon: MapPin,
+    title: "Beautiful Destinations",
+    description: "Discover places worth visiting",
+  },
+  {
+    icon: Camera,
+    title: "Travel Galleries",
+    description: "Capture unforgettable moments",
+  },
+  {
+    icon: Video,
+    title: "Memorable Experiences",
+    description: "Make every journey special",
+  },
+];
+
 export default function Footer() {
   return (
-    <footer className="bg-gray-950 text-white">
-      {/* Main Footer */}
-      <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Brand */}
-        <div>
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600">
-              <Compass size={24} />
+    <footer className="relative overflow-hidden bg-[#071510] text-white">
+      {/* Decorative Background */}
+      <div className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
+
+      <div className="pointer-events-none absolute -bottom-32 -left-32 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl" />
+
+      {/* ================= MAIN FOOTER ================= */}
+      <div className="relative mx-auto max-w-7xl px-6 py-10 lg:px-8 lg:py-11">
+        <div className="grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.35fr_0.8fr_1.1fr_1.1fr]">
+          {/* ================= BRAND ================= */}
+          <div>
+            <Link href="/" className="group inline-flex items-center gap-3">
+              {/* Logo */}
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md shadow-emerald-900/25 transition duration-300 group-hover:scale-105">
+                <Compass size={21} strokeWidth={2} className="text-white" />
+              </div>
+
+              {/* Brand */}
+              <div>
+                <h2 className="text-lg font-bold tracking-tight text-white">
+                  SST Travels
+                </h2>
+
+                <p className="text-[9px] font-medium uppercase tracking-[0.18em] text-emerald-400">
+                  Travel • Explore • Experience
+                </p>
+              </div>
+            </Link>
+
+            <p className="mt-4 max-w-xs text-xs leading-6 text-slate-400">
+              Discover beautiful destinations, comfortable journeys, and
+              unforgettable travel experiences with SST Travels.
+            </p>
+
+            {/* Trust Badge */}
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/5 px-3 py-1.5">
+              <ShieldCheck size={14} className="text-emerald-400" />
+
+              <span className="text-[11px] font-medium text-slate-300">
+                Travel with comfort & confidence
+              </span>
             </div>
+          </div>
 
-            <span className="text-xl font-bold">
-              Explore India
-            </span>
-          </Link>
+          {/* ================= QUICK LINKS ================= */}
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-white">
+              Quick Links
+            </h3>
 
-          <p className="mt-5 max-w-xs text-sm leading-7 text-gray-400">
-            Discover amazing destinations, explore unique
-            experiences, and plan unforgettable journeys.
-          </p>
+            <ul className="mt-4 space-y-2.5">
+              {quickLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="group inline-flex items-center text-xs text-slate-400 transition duration-200 hover:text-emerald-400"
+                  >
+                    <span>{link.name}</span>
 
-          <p className="mt-5 flex items-center gap-2 text-sm text-gray-400">
-            <Globe size={16} />
-            Explore the world with us
-          </p>
-        </div>
+                    <ArrowUpRight
+                      size={12}
+                      className="ml-1 opacity-0 transition duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100"
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-        {/* Quick Links */}
-        <div>
-          <h3 className="text-base font-semibold">
-            Quick Links
-          </h3>
+          {/* ================= EXPLORE ================= */}
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-white">
+              Explore
+            </h3>
 
-          <ul className="mt-5 space-y-3">
-            {quickLinks.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="text-sm text-gray-400 transition hover:text-white"
-                >
-                  {link.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
+            <div className="mt-4 space-y-3">
+              {exploreItems.map((item) => {
+                const Icon = item.icon;
 
-        {/* Explore */}
-        <div>
-          <h3 className="text-base font-semibold">
-            Explore
-          </h3>
+                return (
+                  <div
+                    key={item.title}
+                    className="group flex items-start gap-2.5"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 transition duration-300 group-hover:bg-emerald-500/20">
+                      <Icon size={15} className="text-emerald-400" />
+                    </div>
 
-          <ul className="mt-5 space-y-4 text-sm text-gray-400">
-            <li className="flex items-center gap-3">
-              <MapPin
-                size={17}
-                className="text-indigo-400"
-              />
-              Beautiful Destinations
-            </li>
+                    <div>
+                      <p className="text-xs font-medium text-slate-200">
+                        {item.title}
+                      </p>
 
-            <li className="flex items-center gap-3">
-              <Camera
-                size={17}
-                className="text-indigo-400"
-              />
-              Travel Photo Galleries
-            </li>
+                      <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
+                        {item.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-            <li className="flex items-center gap-3">
-              <Video
-                size={17}
-                className="text-indigo-400"
-              />
-              Memorable Experiences
-            </li>
-          </ul>
-        </div>
+          {/* ================= CONTACT ================= */}
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-white">
+              Contact Us
+            </h3>
 
-        {/* Contact */}
-        <div>
-          <h3 className="text-base font-semibold">
-            Contact Us
-          </h3>
+            <div className="mt-4 space-y-3">
+              {/* Location */}
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                  <MapPin size={15} className="text-emerald-400" />
+                </div>
 
-          <ul className="mt-5 space-y-4 text-sm text-gray-400">
-            <li className="flex items-start gap-3">
-              <MapPin
-                size={17}
-                className="mt-0.5 shrink-0 text-indigo-400"
-              />
+                <div>
+                  <p className="text-[10px] text-slate-500">Location</p>
 
-              <span>India</span>
-            </li>
+                  <p className="mt-0.5 text-xs text-slate-300">India</p>
+                </div>
+              </div>
 
-            <li className="flex items-center gap-3">
-              <Phone
-                size={17}
-                className="shrink-0 text-indigo-400"
-              />
+              {/* Phone */}
+              <a
+                href="tel:+910000000000"
+                className="group flex items-start gap-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 transition group-hover:bg-emerald-500/20">
+                  <Phone size={15} className="text-emerald-400" />
+                </div>
 
-              <span>+91 00000 00000</span>
-            </li>
+                <div>
+                  <p className="text-[10px] text-slate-500">Phone</p>
 
-            <li className="flex items-start gap-3">
-              <Mail
-                size={17}
-                className="mt-0.5 shrink-0 text-indigo-400"
-              />
+                  <p className="mt-0.5 text-xs text-slate-300 transition group-hover:text-emerald-400">
+                    +91 00000 00000
+                  </p>
+                </div>
+              </a>
 
-              <span>contact@example.com</span>
-            </li>
-          </ul>
+              {/* Email */}
+              <a
+                href="mailto:contact@example.com"
+                className="group flex items-start gap-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 transition group-hover:bg-emerald-500/20">
+                  <Mail size={15} className="text-emerald-400" />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-[10px] text-slate-500">Email</p>
+
+                  <p className="mt-0.5 truncate text-xs text-slate-300 transition group-hover:text-emerald-400">
+                    contact@example.com
+                  </p>
+                </div>
+              </a>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Bottom Footer */}
-      <div className="border-t border-gray-800">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+      {/* ================= BOTTOM BAR ================= */}
+      <div className="relative border-t border-white/5">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-6 py-4 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between lg:px-8">
           <p>
-            © {new Date().getFullYear()} Explore India. All
+            © {new Date().getFullYear()}{" "}
+            <span className="font-medium text-slate-400">SST Travels</span>. All
             rights reserved.
           </p>
 
-          <Link
-            href="/contact"
-            className="flex items-center gap-1 transition hover:text-white"
-          >
-            Plan Your Trip
-            <ArrowUpRight size={15} />
-          </Link>
+          <div className="flex items-center gap-1.5">
+            <Globe2 size={13} className="text-emerald-500" />
+
+            <span>Explore more. Travel better.</span>
+          </div>
         </div>
       </div>
     </footer>

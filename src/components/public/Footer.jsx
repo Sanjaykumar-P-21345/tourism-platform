@@ -1,222 +1,234 @@
 import Link from "next/link";
-import {
-  Mail,
-  Phone,
-  MapPin,
-  ArrowUpRight,
-  Globe,
-  Camera,
-  Video,
-} from "lucide-react";
+import { Globe2, Mail, MapPin, PhoneCall, Plane } from "lucide-react";
 
-const quickLinks = [
+/* =========================================================
+   FOOTER LINKS
+   ========================================================= */
+
+const footerLinks = [
   {
-    label: "Home",
-    href: "/",
+    title: "Explore",
+    links: [
+      {
+        label: "Destinations",
+        href: "/destinations",
+      },
+      {
+        label: "Packages",
+        href: "/packages",
+      },
+      {
+        label: "Hotels",
+        href: "/hotels",
+      },
+    ],
   },
   {
-    label: "Destinations",
-    href: "/destinations",
-  },
-  {
-    label: "Places to Visit",
-    href: "/places",
-  },
-  {
-    label: "Travel Packages",
-    href: "/packages",
-  },
-  {
-    label: "Reviews",
-    href: "/reviews",
+    title: "Company",
+    links: [
+      {
+        label: "About Us",
+        href: "/about",
+      },
+      {
+        label: "Contact",
+        href: "/contact",
+      },
+      {
+        label: "Food & Travel",
+        href: "/food-travel",
+      },
+    ],
   },
 ];
 
-const supportLinks = [
-  {
-    label: "Contact Us",
-    href: "/contact",
-  },
-  {
-    label: "Hotels & Stays",
-    href: "/hotels",
-  },
-  {
-    label: "Transportation",
-    href: "/transportation",
-  },
-  {
-    label: "FAQs",
-    href: "/faq",
-  },
-];
+/* =========================================================
+   CONTACT DETAILS
 
-const socialLinks = [
-  {
-    label: "Website",
-    href: "#",
-    icon: Globe,
-  },
-  {
-    label: "Photos",
-    href: "#",
-    icon: Camera,
-  },
-  {
-    label: "Videos",
-    href: "#",
-    icon: Video,
-  },
-];
+   IMPORTANT:
+   Replace these two values with your actual SST Travels
+   Gmail address and contact number.
+   ========================================================= */
+
+const CONTACT_EMAIL = "yourgmail@gmail.com";
+const CONTACT_PHONE = "+91 98765 43210";
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
 
 export default function Footer() {
   return (
-    <footer className="bg-slate-950 text-slate-300">
-      {/* MAIN FOOTER */}
+    <footer className="relative overflow-hidden bg-[#034c3d] text-white">
+      {/* ===================================================
+          BACKGROUND DECORATION
+          =================================================== */}
 
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
-          {/* BRAND */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-10">
+        <div className="absolute -left-24 top-10 h-72 w-72 rounded-full border border-white/30" />
+
+        <div className="absolute -left-12 top-20 h-80 w-80 rounded-full border border-white/20" />
+
+        <div className="absolute -right-24 -bottom-20 h-80 w-80 rounded-full border border-white/20" />
+
+        <div className="absolute right-20 top-10 h-40 w-40 rounded-full border border-white/10" />
+      </div>
+
+      {/* ===================================================
+          MAIN FOOTER CONTENT
+          Reduced vertical size
+          =================================================== */}
+
+      <div className="relative z-10 mx-auto max-w-[1380px] px-6 py-10 lg:px-10 lg:py-12">
+        <div className="grid gap-9 lg:grid-cols-[1.55fr_0.9fr_0.9fr_1.1fr]">
+          {/* =================================================
+              BRAND
+              ================================================= */}
 
           <div>
-            <Link href="/" className="inline-flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white">
-                <MapPin size={22} />
+            <Link href="/" className="inline-flex items-center gap-3">
+              {/* Logo */}
+              <div className="relative flex h-12 w-12 items-center justify-center">
+                <Globe2
+                  size={44}
+                  strokeWidth={1.5}
+                  className="text-[#b8f0df]"
+                />
+
+                <Plane
+                  size={20}
+                  className="absolute -right-1 -top-1 rotate-[-25deg] fill-[#b8f0df] text-[#b8f0df]"
+                />
               </div>
 
+              {/* Brand text */}
               <div>
-                <h2 className="text-lg font-extrabold text-white">
-                  Explore
-                  <span className="text-indigo-400">India</span>
-                </h2>
+                <div className="text-2xl font-black tracking-tight">
+                  SST Travels
+                </div>
 
-                <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">
-                  Travel & Discover
-                </p>
+                <div className="mt-0.5 text-[10px] tracking-[0.12em] text-white/55">
+                  EXPLORE • DISCOVER • EXPERIENCE
+                </div>
               </div>
             </Link>
 
-            <p className="mt-5 max-w-xs text-sm leading-7 text-slate-400">
-              Discover amazing destinations, explore unforgettable places, and
-              plan your next journey with confidence.
+            <p className="mt-5 max-w-[380px] text-sm leading-6 text-white/60">
+              Comfortable rides, safe journeys and memorable travel experiences
+              for every destination.
             </p>
 
-            {/* SOCIAL LINKS */}
+            {/* =================================================
+                GMAIL LINK
+                ================================================= */}
 
-            <div className="mt-6 flex items-center gap-3">
-              {socialLinks.map((social) => {
-                const Icon = social.icon;
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="mt-5 inline-flex items-center gap-3 text-sm font-medium text-white/70 transition-colors duration-300 hover:text-[#b8f0df]"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10">
+                <Mail size={17} />
+              </span>
 
-                return (
-                  <a
-                    key={social.label}
-                    href={social.href}
-                    aria-label={social.label}
-                    className="rounded-lg bg-slate-800 p-2.5 transition hover:bg-indigo-600 hover:text-white"
-                  >
-                    <Icon size={17} />
-                  </a>
-                );
-              })}
-            </div>
+              <span>{CONTACT_EMAIL}</span>
+            </a>
+
+            {/* =================================================
+                PHONE CONTACT
+                ================================================= */}
+
+            <a
+              href={`tel:${CONTACT_PHONE.replace(/\s+/g, "")}`}
+              className="mt-3 flex items-center gap-3 text-sm font-medium text-white/70 transition-colors duration-300 hover:text-[#b8f0df]"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10">
+                <PhoneCall size={17} />
+              </span>
+
+              <span>{CONTACT_PHONE}</span>
+            </a>
           </div>
 
-          {/* QUICK LINKS */}
+          {/* =================================================
+              EXPLORE LINKS
+              ================================================= */}
 
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white">
-              Quick Links
-            </h3>
+          {footerLinks.map((group) => (
+            <div key={group.title}>
+              <h3 className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#a9ead7]">
+                {group.title}
+              </h3>
 
-            <ul className="mt-5 space-y-3">
-              {quickLinks.map((link) => (
-                <li key={link.href}>
+              <div className="mt-5 flex flex-col gap-2.5">
+                {group.links.map((link) => (
                   <Link
+                    key={link.href}
                     href={link.href}
-                    className="text-sm text-slate-400 transition hover:text-indigo-400"
+                    className="w-fit text-sm text-white/60 transition-all duration-300 hover:translate-x-1 hover:text-white"
                   >
                     {link.label}
                   </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* SUPPORT */}
-
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white">
-              Explore More
-            </h3>
-
-            <ul className="mt-5 space-y-3">
-              {supportLinks.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-slate-400 transition hover:text-indigo-400"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* CONTACT */}
-
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white">
-              Get In Touch
-            </h3>
-
-            <div className="mt-5 space-y-4">
-              <div className="flex items-start gap-3">
-                <MapPin size={18} className="mt-1 shrink-0 text-indigo-400" />
-
-                <p className="text-sm leading-6 text-slate-400">
-                  Coimbatore, Tamil Nadu, India
-                </p>
+                ))}
               </div>
-
-              <div className="flex items-center gap-3">
-                <Phone size={18} className="shrink-0 text-indigo-400" />
-
-                <p className="text-sm text-slate-400">+91 00000 00000</p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Mail size={18} className="shrink-0 text-indigo-400" />
-
-                <p className="break-all text-sm text-slate-400">
-                  support@example.com
-                </p>
-              </div>
-
-              <Link
-                href="/contact"
-                className="inline-flex items-center gap-2 pt-2 text-sm font-bold text-indigo-400 transition hover:text-indigo-300"
-              >
-                Contact our team
-                <ArrowUpRight size={16} />
-              </Link>
             </div>
+          ))}
+
+          {/* =================================================
+              RIGHT CONTACT / MESSAGE
+              ================================================= */}
+
+          <div>
+            <div className="flex items-center gap-2 text-[#b8f0df]">
+              <MapPin size={17} />
+
+              <span className="text-xs font-bold uppercase tracking-[0.12em]">
+                SST Travels
+              </span>
+            </div>
+
+            <h3 className="mt-3 text-2xl font-black leading-tight sm:text-3xl">
+              Travel More.
+              <br />
+              Explore More.
+            </h3>
+
+            <p className="mt-3 max-w-[300px] text-sm leading-6 text-white/55">
+              Let every road become part of your story with SST Travels.
+            </p>
+
+            {/* Contact Button */}
+            <Link
+              href="/contact"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#075847] shadow-[0_8px_25px_rgba(0,0,0,0.12)] transition-all duration-300 hover:-translate-y-1 hover:bg-[#effff9]"
+            >
+              <PhoneCall size={16} />
+              Contact Us
+            </Link>
           </div>
         </div>
-      </div>
 
-      {/* BOTTOM FOOTER */}
+        {/* ===================================================
+            DIVIDER
+            =================================================== */}
 
-      <div className="border-t border-slate-800">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-center text-xs text-slate-500 sm:px-6 md:flex-row md:items-center md:justify-between md:text-left lg:px-8">
-          <p>© {new Date().getFullYear()} ExploreIndia. All rights reserved.</p>
+        <div className="my-8 h-px bg-white/10" />
 
-          <div className="flex justify-center gap-5 md:justify-end">
-            <Link href="/privacy" className="transition hover:text-indigo-400">
+        {/* ===================================================
+            BOTTOM
+            =================================================== */}
+
+        <div className="flex flex-col items-center justify-between gap-3 text-xs text-white/40 sm:flex-row">
+          <p>© {new Date().getFullYear()} SST Travels. All rights reserved.</p>
+
+          <div className="flex items-center gap-5">
+            <Link
+              href="/privacy-policy"
+              className="transition-colors hover:text-white"
+            >
               Privacy Policy
             </Link>
 
-            <Link href="/terms" className="transition hover:text-indigo-400">
+            <Link href="/terms" className="transition-colors hover:text-white">
               Terms & Conditions
             </Link>
           </div>

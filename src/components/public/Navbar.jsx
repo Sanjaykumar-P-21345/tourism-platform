@@ -1,16 +1,16 @@
-
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import {
+  Globe2,
   Menu,
+  Plane,
+  Search,
   X,
-  MapPin,
-  ChevronDown,
 } from "lucide-react";
 
-const navigationLinks = [
+const navLinks = [
   {
     label: "Home",
     href: "/",
@@ -20,16 +20,20 @@ const navigationLinks = [
     href: "/destinations",
   },
   {
-    label: "Places",
-    href: "/places",
-  },
-  {
     label: "Packages",
     href: "/packages",
   },
   {
     label: "Hotels",
     href: "/hotels",
+  },
+  // {
+  //   label: "Food & Travel",
+  //   href: "/food-travel",
+  // },
+  {
+    label: "About",
+    href: "/about",
   },
   {
     label: "Contact",
@@ -38,99 +42,118 @@ const navigationLinks = [
 ];
 
 export default function Navbar() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  function closeMobileMenu() {
-    setMobileMenuOpen(false);
-  }
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-md">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
-        <div className="flex h-20 items-center justify-between">
-
-          {/* LOGO */}
+    <header className="absolute left-0 right-0 top-0 z-50">
+      <div className="mx-auto max-w-[1450px] px-5 pt-5 sm:px-8 lg:px-10">
+        <nav className="flex items-center justify-between">
+          {/* =================================================
+              LOGO
+              ================================================= */}
 
           <Link
             href="/"
-            onClick={closeMobileMenu}
-            className="flex items-center gap-2"
+            className="group flex items-center gap-3"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
-              <MapPin size={24} strokeWidth={2.5} />
+            <div className="relative flex h-14 w-14 items-center justify-center">
+              <Globe2
+                size={51}
+                strokeWidth={1.7}
+                className="text-[#08795f]"
+              />
+
+              <Plane
+                size={25}
+                strokeWidth={2.5}
+                className="absolute -right-1 -top-1 rotate-[-25deg] fill-[#08795f] text-[#08795f]"
+              />
             </div>
 
-            <div>
-              <h1 className="text-lg font-extrabold tracking-tight text-slate-900">
-                Explore<span className="text-indigo-600">India</span>
-              </h1>
+            <div className="hidden sm:block">
+              <div className="text-[28px] font-black leading-none tracking-[-1.2px] text-[#075847]">
+                SST Travels
+              </div>
 
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Travel & Discover
-              </p>
+              <div className="mt-1 text-[12px] font-medium tracking-wide text-[#28695d]">
+                Explore&nbsp; • &nbsp;Discover&nbsp; • &nbsp;Experience
+              </div>
             </div>
           </Link>
 
-          {/* DESKTOP NAVIGATION */}
+          {/* =================================================
+              DESKTOP NAV
+              ================================================= */}
 
-          <nav className="hidden items-center gap-7 lg:flex">
-            {navigationLinks.map((link) => (
+          <div className="hidden items-center gap-7 lg:flex xl:gap-9">
+            {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-sm font-semibold text-slate-600 transition hover:text-indigo-600"
+                className="group relative py-2 text-[14px] font-semibold text-[#124f45] transition-colors hover:text-[#07805f]"
               >
                 {link.label}
+
+                {link.label === "Home" && (
+                  <span className="absolute -bottom-1 left-0 h-[3px] w-full rounded-full bg-[#07805f]" />
+                )}
+
+                {link.label !== "Home" && (
+                  <span className="absolute -bottom-1 left-0 h-[2px] w-0 rounded-full bg-[#07805f] transition-all duration-300 group-hover:w-full" />
+                )}
               </Link>
             ))}
-          </nav>
+          </div>
 
-          {/* DESKTOP ACTION */}
+          {/* =================================================
+              RIGHT ACTIONS
+              ================================================= */}
 
-          <div className="hidden lg:block">
+          <div className="hidden items-center gap-5 lg:flex">
+            {/* <button
+              type="button"
+              aria-label="Search"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-[#075847] transition-all hover:bg-white/60"
+            >
+              <Search size={22} />
+            </button> */}
+
             <Link
               href="/contact"
-              className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700"
+              className="inline-flex items-center gap-2 rounded-full bg-[#075847] px-6 py-3.5 text-sm font-bold text-white shadow-[0_10px_25px_rgba(0,60,45,0.16)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#064c3e]"
             >
+              <Plane size={18} />
               Plan Your Trip
             </Link>
           </div>
 
-          {/* MOBILE MENU BUTTON */}
+          {/* =================================================
+              MOBILE MENU BUTTON
+              ================================================= */}
 
           <button
             type="button"
-            aria-label={
-              mobileMenuOpen
-                ? "Close navigation menu"
-                : "Open navigation menu"
-            }
-            onClick={() =>
-              setMobileMenuOpen((current) => !current)
-            }
-            className="rounded-lg p-2 text-slate-700 transition hover:bg-slate-100 lg:hidden"
+            aria-label="Open menu"
+            onClick={() => setMobileOpen((value) => !value)}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/65 text-[#075847] shadow-sm backdrop-blur-md lg:hidden"
           >
-            {mobileMenuOpen ? (
-              <X size={25} />
-            ) : (
-              <Menu size={25} />
-            )}
+            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
+        </nav>
 
-        </div>
+        {/* =================================================
+            MOBILE MENU
+            ================================================= */}
 
-        {/* MOBILE NAVIGATION */}
-
-        {mobileMenuOpen && (
-          <div className="border-t border-slate-100 py-4 lg:hidden">
-            <nav className="flex flex-col gap-1">
-              {navigationLinks.map((link) => (
+        {mobileOpen && (
+          <div className="mt-4 rounded-[25px] border border-white/70 bg-white/95 p-4 shadow-xl backdrop-blur-xl lg:hidden">
+            <div className="flex flex-col">
+              {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  onClick={closeMobileMenu}
-                  className="rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-600"
+                  onClick={() => setMobileOpen(false)}
+                  className="rounded-xl px-4 py-3 text-sm font-semibold text-[#075847] hover:bg-[#eaf8f3]"
                 >
                   {link.label}
                 </Link>
@@ -138,15 +161,15 @@ export default function Navbar() {
 
               <Link
                 href="/contact"
-                onClick={closeMobileMenu}
-                className="mt-2 rounded-lg bg-indigo-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-indigo-700"
+                onClick={() => setMobileOpen(false)}
+                className="mt-2 flex items-center justify-center gap-2 rounded-xl bg-[#075847] px-5 py-3.5 text-sm font-bold text-white"
               >
+                <Plane size={17} />
                 Plan Your Trip
               </Link>
-            </nav>
+            </div>
           </div>
         )}
-
       </div>
     </header>
   );
